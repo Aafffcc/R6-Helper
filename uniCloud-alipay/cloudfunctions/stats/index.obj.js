@@ -69,11 +69,12 @@ async function fetchUpstreamStats(query) {
 }
 
 /**
- * 云对象跨端错误约定：向外抛普通对象 { errCode, errMsg }。
- * 携带 errCode 的 Error 实例在支付宝云调用层会被当作未捕获异常
- * 以“用户函数代码语法或逻辑异常”（HTTP 500）返回，客户端拿不到错误码。
+ * 响应信封约定：成功返回 { errCode: 'OK', ...data }，
+ * 业务错误返回 { errCode, errMsg }（HTTP 200，不 throw）。
+ * 支付宝云调用层不会还原 throw 的错误码——无论 Error 还是普通对象
+ * 都会变成调用失败（400/500）并丢失 errCode，客户端只能拿到未知错误。
  */
-function toTransportError(error) {
+function toErrorResponse(error) {
   if (isPlainObject(error) && typeof error.errCode === 'string') {
     return error;
   }
@@ -94,7 +95,7 @@ module.exports = {
       // 配额纪律：同一查询在缓存有效期内不得重复请求上游
       const cached = await readFreshCache(cacheKey);
       if (cached) {
-        return { stats: cached, fromCache: true };
+        return { errCode: 'OK', stats: cached, fromCache: true };
       }
 
       const raw = await fetchUpstreamStats(query);
@@ -103,14 +104,14 @@ module.exports = {
         platform: query.platform,
       });
       await writeCache(cacheKey, query, stats);
-      return { stats, fromCache: false };
+      return { errCode: 'OK', stats, fromCache: false };
     } catch (error) {
-      const transportError = toTransportError(error);
-      if (transportError.errCode === 'E_UNKNOWN' || transportError.errCode === 'E_UPSTREAM_ERROR') {
+      const response = toErrorResponse(error);
+      if (response.errCode === 'E_UNKNOWN' || response.errCode === 'E_UPSTREAM_ERROR') {
         // 非预期错误保留原始堆栈进云端日志，便于排查
         console.error('[stats] getPlayerStats 执行异常', error);
       }
-      throw transportError;
+      return response;
     }
   },
 };

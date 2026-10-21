@@ -60,3 +60,23 @@ export function toAppError(error: unknown): AppError {
     readStringProperty(error, 'errMsg') ?? readStringProperty(error, 'message') ?? code;
   return new AppError('E_UNKNOWN', detail);
 }
+
+/**
+ * 云对象响应信封校验：云端以 200 响应体返回 { errCode, errMsg } 表示业务错误，
+ * errCode 缺失或为 'OK' 视为成功。支付宝云传输层不保留 throw 的 errCode
+ * （任何 throw 都变成调用失败并丢失错误码），因此业务错误不走 throw 传输。
+ */
+export function assertCloudSuccess(result: unknown): void {
+  if (typeof result !== 'object' || result === null) {
+    return;
+  }
+  const errCode = readStringProperty(result, 'errCode');
+  if (errCode === null || errCode === 'OK') {
+    return;
+  }
+  const errMsg = readStringProperty(result, 'errMsg');
+  throw new AppError(
+    (KNOWN_CODES.has(errCode) ? errCode : 'E_UNKNOWN') as AppErrorCode,
+    errMsg ?? errCode,
+  );
+}

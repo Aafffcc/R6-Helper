@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { AppError, toAppError } from '../errors';
+import { AppError, assertCloudSuccess, toAppError } from '../errors';
 
 describe('toAppError', () => {
   it('AppError 原样返回，不重复包装', () => {
@@ -29,5 +29,34 @@ describe('toAppError', () => {
     expect(toAppError('boom').code).toBe('E_UNKNOWN');
     expect(toAppError(null).code).toBe('E_UNKNOWN');
     expect(toAppError(undefined).code).toBe('E_UNKNOWN');
+  });
+});
+
+describe('assertCloudSuccess（云对象响应信封）', () => {
+  it('成功信封与无 errCode 的响应直接通过', () => {
+    expect(() => assertCloudSuccess({ errCode: 'OK', stats: {}, fromCache: true })).not.toThrow();
+    expect(() => assertCloudSuccess({ stats: {} })).not.toThrow();
+    expect(() => assertCloudSuccess(null)).not.toThrow();
+  });
+
+  it('业务错误信封转为 AppError 并保留错误码', () => {
+    expect(() =>
+      assertCloudSuccess({ errCode: 'E_UPSTREAM_NOT_CONFIGURED', errMsg: '上游数据源尚未接入' }),
+    ).toThrowError(AppError);
+    try {
+      assertCloudSuccess({ errCode: 'E_UPSTREAM_NOT_CONFIGURED', errMsg: '上游数据源尚未接入' });
+    } catch (error) {
+      expect((error as AppError).code).toBe('E_UPSTREAM_NOT_CONFIGURED');
+      expect((error as AppError).detail).toBe('上游数据源尚未接入');
+    }
+  });
+
+  it('未知错误码收敛为 E_UNKNOWN', () => {
+    try {
+      assertCloudSuccess({ errCode: 'E_SOMETHING_NEW', errMsg: '未知错误' });
+      expect.unreachable('should throw');
+    } catch (error) {
+      expect((error as AppError).code).toBe('E_UNKNOWN');
+    }
   });
 });
