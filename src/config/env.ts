@@ -1,7 +1,7 @@
 /**
- * 环境与迁移敏感信息统一配置。
- * 规范约束：spaceId、默认域名、fileID 口径只允许在此处定义，
- * 服务空间迁移时仅改本文件；禁止在页面、组件中散落硬编码。
+ * 环境与迁移敏感信息统一配置（类型层面唯一入口）。
+ * 真实凭据存放在仓库根目录 .env.local（已 git 忽略，不提交），
+ * 构建时经 Vite 注入；模板见 .env.example。服务空间迁移时只改 .env.local。
  *
  * 凭据口径（uniCloud 官方文档）：
  * - 支付宝云空间没有 clientSecret（那是阿里云空间的参数）；
@@ -15,16 +15,20 @@
  * uni-config-center / 云函数环境配置中，小程序端不得保存。
  */
 
+function readEnvString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 export const UNICLOUD_SPACE = {
   provider: 'alipay',
-  spaceId: '',
-  accessKey: '',
-  secretKey: '',
-  spaceAppId: '',
-} as const;
+  spaceId: readEnvString(import.meta.env.VITE_UNICLOUD_SPACE_ID),
+  accessKey: readEnvString(import.meta.env.VITE_UNICLOUD_ACCESS_KEY),
+  secretKey: readEnvString(import.meta.env.VITE_UNICLOUD_SECRET_KEY),
+  spaceAppId: readEnvString(import.meta.env.VITE_UNICLOUD_SPACE_APP_ID),
+};
 
-/** 静态图片（操作员/武器/战队/联赛）托管基址，接入 uniCloud 存储或 CDN 后填写 */
-export const ASSET_BASE_URL = '';
+/** 静态图片（操作员/武器/战队/联赛）托管基址，留空时图鉴显示首字母占位块 */
+export const ASSET_BASE_URL = readEnvString(import.meta.env.VITE_ASSET_BASE_URL);
 
 const ALIPAY_ENDPOINT_TEMPLATE = 'https://{spaceId}.api-hz.cloudbasefunction.cn';
 

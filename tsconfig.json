@@ -21,8 +21,8 @@
     "src/**/*.ts",
     "src/**/*.d.ts",
     "src/**/*.vue",
-    "uniCloud/**/*.d.ts",
-    "uniCloud/**/*.spec.ts"
+    "uniCloud-alipay/**/*.d.ts",
+    "uniCloud-alipay/**/*.spec.ts"
   ],
   "exclude": ["node_modules", "dist", "unpackage"]
 }

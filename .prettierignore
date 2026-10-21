@@ -6,3 +6,4 @@ src/static/gen/
 package-lock.json
 project.config.json
 project.private.config.json
+.env*

@@ -9,6 +9,7 @@ project.config.json
 project.private.config.json
 
 # 本机环境与私有配置（规范：不提交、不批量格式化）
+.env
 .env.local
 .env.*.local
 .hbuilderx/

@@ -9,7 +9,7 @@ export type {
   NormalizedModeStats,
   NormalizedPlayerStats,
   NormalizedRankedSummary,
-} from '../../uniCloud/cloudfunctions/common/stats-core';
+} from '../../uniCloud-alipay/cloudfunctions/common/stats-core';
 
 export type StatsPlatform = 'pc' | 'psn' | 'xbox';
 

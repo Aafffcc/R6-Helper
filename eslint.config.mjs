@@ -48,7 +48,7 @@ export default tseslint.config(
   },
   {
     // uniCloud 云函数与公共模块为 CommonJS 运行时，require 是平台要求
-    files: ['uniCloud/**/*.js'],
+    files: ['uniCloud-alipay/**/*.js'],
     languageOptions: {
       sourceType: 'commonjs',
     },
