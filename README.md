@@ -46,7 +46,7 @@ npm run verify            # format:check + lint + type-check + test
 - H5 / HTML 预览不能替代微信开发者工具与真机验证。
 - 已知噪音：uni-app 编译器经旧版 JS API 调用 Dart Sass，构建时有 `legacy-js-api` 弃用警告，不影响产物。
 
-## uniCloud 接入步骤（当前为占位状态）
+## uniCloud 接入步骤
 
 1. 配置空间凭据：复制 `.env.example` 为 `.env.local` 填写（真实值不进仓库，[src/config/env.ts](./src/config/env.ts) 是类型层面唯一读取点）。
    注意：支付宝云空间**没有 `clientSecret`**（那是阿里云空间的参数），需要的是 `spaceId` + `accessKey` + `secretKey` + `spaceAppId` 四项，均在 [uniCloud 控制台](https://unicloud.dcloud.net.cn)对应空间的「服务空间详情」页查看。
@@ -62,7 +62,8 @@ npm run verify            # format:check + lint + type-check + test
 - RP 与 MMR 是独立维度，字段分开存放，互不推断；
 - 未知数据一律 `null`，展示层渲染为 `—`，禁止填零；
 - 排位数据只表示当前赛季，不做历史回退；
-- 战绩查询必须走 `stats-cache` 缓存，TTL 10 分钟（`stats-core.STATS_CACHE_TTL_MS`），有效期内不重复请求上游。
+- 战绩查询必须走 `stats-cache` 缓存，TTL 10 分钟（`stats-core.STATS_CACHE_TTL_MS`），有效期内不重复请求上游；
+- 云对象采用响应信封：成功 `{ errCode: 'OK', ... }`，业务错误 `{ errCode, errMsg }`（HTTP 200）。支付宝云传输层不保留 throw 的 errCode，业务错误禁止走 throw。
 
 ## 静态数据维护
 
@@ -73,7 +74,8 @@ npm run verify            # format:check + lint + type-check + test
 ## 当前状态与下一步
 
 - [x] 工程骨架、校验链路（format/lint/type-check/test）、微信端构建
-- [x] stats 云对象 + 缓存 Schema + 归一化公共模块（含 21 个回归用例）
+- [x] stats 云对象 + 缓存 Schema + 归一化公共模块（含 28 个回归用例）
+- [x] 云链路联调验证（开发者工具）：客户端 SDK 初始化 → 云对象 → 参数校验 → 缓存读取 → 错误信封
 - [ ] 育碧上游数据源适配（凭据走 uni-config-center，接入前查询返回 `E_UPSTREAM_NOT_CONFIGURED`）
 - [ ] 操作员/武器/战队图片托管（uniCloud 存储 or CDN）
-- [ ] 微信端真机联调（appid、合法域名、云对象部署）
+- [ ] 微信端真机验证（合法域名配置后的真机回归）
