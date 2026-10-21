@@ -68,23 +68,49 @@ async function fetchUpstreamStats(query) {
   return client.fetchPlayerStats(query);
 }
 
+/**
+ * 云对象跨端错误约定：向外抛普通对象 { errCode, errMsg }。
+ * 携带 errCode 的 Error 实例在支付宝云调用层会被当作未捕获异常
+ * 以“用户函数代码语法或逻辑异常”（HTTP 500）返回，客户端拿不到错误码。
+ */
+function toTransportError(error) {
+  if (isPlainObject(error) && typeof error.errCode === 'string') {
+    return error;
+  }
+  if (error instanceof Error) {
+    // 未携带 errCode 的 Error 属于非预期异常，统一按未知错误收敛并记日志
+    const errCode = typeof error.errCode === 'string' ? error.errCode : 'E_UNKNOWN';
+    return { errCode, errMsg: error.message };
+  }
+  return { errCode: 'E_UNKNOWN', errMsg: '查询失败' };
+}
+
 module.exports = {
   async getPlayerStats(params) {
-    const query = validatePlayerStatsQuery(params);
-    const cacheKey = normalizeCacheKey(query.platform, query.nickname);
+    try {
+      const query = validatePlayerStatsQuery(params);
+      const cacheKey = normalizeCacheKey(query.platform, query.nickname);
 
-    // 配额纪律：同一查询在缓存有效期内不得重复请求上游
-    const cached = await readFreshCache(cacheKey);
-    if (cached) {
-      return { stats: cached, fromCache: true };
+      // 配额纪律：同一查询在缓存有效期内不得重复请求上游
+      const cached = await readFreshCache(cacheKey);
+      if (cached) {
+        return { stats: cached, fromCache: true };
+      }
+
+      const raw = await fetchUpstreamStats(query);
+      const stats = normalizeUpstreamStats(raw, {
+        nickname: query.nickname,
+        platform: query.platform,
+      });
+      await writeCache(cacheKey, query, stats);
+      return { stats, fromCache: false };
+    } catch (error) {
+      const transportError = toTransportError(error);
+      if (transportError.errCode === 'E_UNKNOWN' || transportError.errCode === 'E_UPSTREAM_ERROR') {
+        // 非预期错误保留原始堆栈进云端日志，便于排查
+        console.error('[stats] getPlayerStats 执行异常', error);
+      }
+      throw transportError;
     }
-
-    const raw = await fetchUpstreamStats(query);
-    const stats = normalizeUpstreamStats(raw, {
-      nickname: query.nickname,
-      platform: query.platform,
-    });
-    await writeCache(cacheKey, query, stats);
-    return { stats, fromCache: false };
   },
 };
