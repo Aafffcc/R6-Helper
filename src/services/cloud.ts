@@ -1,40 +1,13 @@
+import uniCloudSdk, { type UniCloudInstance } from '@dcloudio/uni-cloud';
+
 import { UNICLOUD_SPACE, getUnicloudEndpoint, isUnicloudConfigured } from '@/config/env';
 import { AppError, toAppError } from '@/types/errors';
 
-interface UniCloudInitOptions {
-  provider: string;
-  spaceId: string;
-  accessKey: string;
-  secretKey: string;
-  spaceAppId: string;
-  endpoint: string;
-}
+let cloudClient: UniCloudInstance | null = null;
 
-interface UniCloudClient {
-  importObject(name: string): Record<string, (params?: unknown) => Promise<unknown>>;
-}
-
-interface UniCloudGlobal {
-  init(options: UniCloudInitOptions): UniCloudClient;
-}
-
-let cloudClient: UniCloudClient | null = null;
-
-// 不直接引用全局 uniCloud 声明，避免与平台类型定义冲突；
-// 运行时不存在（未配置空间/平台不支持）时按未配置错误收敛。
-function getUniCloudGlobal(): UniCloudGlobal {
-  const candidate: unknown = (globalThis as { uniCloud?: unknown }).uniCloud;
-  if (
-    typeof candidate !== 'object' ||
-    candidate === null ||
-    typeof (candidate as { init?: unknown }).init !== 'function'
-  ) {
-    throw new AppError('E_CLOUD_NOT_CONFIGURED', 'uniCloud 运行时未就绪');
-  }
-  return candidate as UniCloudGlobal;
-}
-
-function getCloudClient(): UniCloudClient {
+// CLI 构建不会自动注入 uniCloud 运行时（那需要 HBuilderX 的运行菜单），
+// 因此显式 import SDK，并用 .env.local 的空间配置初始化，联调不依赖 HBuilderX。
+function getCloudClient(): UniCloudInstance {
   if (!isUnicloudConfigured()) {
     throw new AppError(
       'E_CLOUD_NOT_CONFIGURED',
@@ -42,7 +15,7 @@ function getCloudClient(): UniCloudClient {
     );
   }
   if (cloudClient === null) {
-    cloudClient = getUniCloudGlobal().init({
+    cloudClient = uniCloudSdk.init({
       provider: UNICLOUD_SPACE.provider,
       spaceId: UNICLOUD_SPACE.spaceId,
       accessKey: UNICLOUD_SPACE.accessKey,

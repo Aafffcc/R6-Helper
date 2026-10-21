@@ -53,8 +53,9 @@ npm run verify            # format:check + lint + type-check + test
 2. 用 HBuilderX 打开项目并登录 DCloud 账号，右键 `uniCloud-alipay` 目录 →「关联云服务空间或项目…」选择你的支付宝云空间，然后上传：
    - 云对象 `uniCloud-alipay/cloudfunctions/stats/`（其 `package.json` 以 `file:` 引用公共模块 `stats-core`）；
    - DB Schema `uniCloud-alipay/database/stats-cache.schema.json`（客户端读写全部拒绝，仅云函数经管理面访问）。
-3. 上游（育碧）会话凭据只允许存放在 `uni-config-center` 的 `r6-upstream` 插件配置中；未配置时 `stats` 云对象按 `E_UPSTREAM_NOT_CONFIGURED` 降级，不影响缓存链路。
-4. 微信端联调前，把 `https://{spaceId}.api-hz.cloudbasefunction.cn`（spaceId 替换为实际值）加入小程序 request 合法域名。
+3. 客户端 SDK 说明：CLI 构建不会自动注入 uniCloud 运行时（那依赖 HBuilderX 运行菜单），项目在 `src/services/cloud.ts` 中显式 import `@dcloudio/uni-cloud` 并用 `.env.local` 的空间配置初始化，因此终端 `npm run dev:mp-weixin` 联调不依赖 HBuilderX；HBuilderX 的关联仅用于上传云函数与 Schema。
+4. 上游（育碧）会话凭据只允许存放在 `uni-config-center` 的 `r6-upstream` 插件配置中；未配置时 `stats` 云对象按 `E_UPSTREAM_NOT_CONFIGURED` 降级，不影响缓存链路。
+5. 微信端联调前，把 `https://{spaceId}.api-hz.cloudbasefunction.cn`（spaceId 替换为实际值）加入小程序 request 合法域名。
 
 ## 数据口径（与旧版对齐，改动需先补回归用例）
 
