@@ -1,10 +1,13 @@
-import { UNICLOUD_SPACE, isUnicloudConfigured } from '@/config/env';
+import { UNICLOUD_SPACE, getUnicloudEndpoint, isUnicloudConfigured } from '@/config/env';
 import { AppError, toAppError } from '@/types/errors';
 
 interface UniCloudInitOptions {
   provider: string;
   spaceId: string;
-  clientSecret: string;
+  accessKey: string;
+  secretKey: string;
+  spaceAppId: string;
+  endpoint: string;
 }
 
 interface UniCloudClient {
@@ -33,13 +36,19 @@ function getUniCloudGlobal(): UniCloudGlobal {
 
 function getCloudClient(): UniCloudClient {
   if (!isUnicloudConfigured()) {
-    throw new AppError('E_CLOUD_NOT_CONFIGURED', 'spaceId / clientSecret 未填写');
+    throw new AppError(
+      'E_CLOUD_NOT_CONFIGURED',
+      '空间凭据未填写（spaceId / accessKey / secretKey / spaceAppId）',
+    );
   }
   if (cloudClient === null) {
     cloudClient = getUniCloudGlobal().init({
       provider: UNICLOUD_SPACE.provider,
       spaceId: UNICLOUD_SPACE.spaceId,
-      clientSecret: UNICLOUD_SPACE.clientSecret,
+      accessKey: UNICLOUD_SPACE.accessKey,
+      secretKey: UNICLOUD_SPACE.secretKey,
+      spaceAppId: UNICLOUD_SPACE.spaceAppId,
+      endpoint: getUnicloudEndpoint(),
     });
   }
   return cloudClient;

@@ -47,12 +47,13 @@ npm run verify            # format:check + lint + type-check + test
 
 ## uniCloud 接入步骤（当前为占位状态）
 
-1. 在 [src/config/env.ts](./src/config/env.ts) 填写支付宝云空间的 `spaceId` / `clientSecret`（唯一配置点，迁移只改这里）。
+1. 在 [src/config/env.ts](./src/config/env.ts) 填写支付宝云空间凭据（唯一配置点，迁移只改这里）。
+   注意：支付宝云空间**没有 `clientSecret`**（那是阿里云空间的参数），需要的是 `spaceId` + `accessKey` + `secretKey` + `spaceAppId` 四项，均在 [uniCloud 控制台](https://unicloud.dcloud.net.cn)对应空间的「服务空间详情」页查看。
 2. 用 HBuilderX 打开项目，关联服务空间后上传：
    - 云对象 `uniCloud/cloudfunctions/stats/`（其 `package.json` 以 `file:` 引用公共模块 `stats-core`）；
    - DB Schema `uniCloud/database/stats-cache.schema.json`（客户端读写全部拒绝，仅云函数经管理面访问）。
 3. 上游（育碧）会话凭据只允许存放在 `uni-config-center` 的 `r6-upstream` 插件配置中；未配置时 `stats` 云对象按 `E_UPSTREAM_NOT_CONFIGURED` 降级，不影响缓存链路。
-4. 微信端联调前，把 uniCloud 默认域名加入小程序 request 合法域名（spaceId 对应的默认域名以 uniCloud 控制台为准）。
+4. 微信端联调前，把 `https://{spaceId}.api-hz.cloudbasefunction.cn`（spaceId 替换为实际值）加入小程序 request 合法域名。
 
 ## 数据口径（与旧版对齐，改动需先补回归用例）
 
