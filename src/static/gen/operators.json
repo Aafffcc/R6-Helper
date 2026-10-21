@@ -1,0 +1,488 @@
+[
+  {
+    "id": "ace",
+    "name": "Ace",
+    "side": "attacker",
+    "image": "ace.png"
+  },
+  {
+    "id": "alibi",
+    "name": "Alibi",
+    "side": "defender",
+    "image": "alibi.png"
+  },
+  {
+    "id": "amaru",
+    "name": "Amaru",
+    "side": "attacker",
+    "image": "amaru.png"
+  },
+  {
+    "id": "aruni",
+    "name": "Aruni",
+    "side": "defender",
+    "image": "aruni.png"
+  },
+  {
+    "id": "ash",
+    "name": "Ash",
+    "side": "attacker",
+    "image": "ash.png"
+  },
+  {
+    "id": "azami",
+    "name": "Azami",
+    "side": "defender",
+    "image": "azami.png"
+  },
+  {
+    "id": "bandit",
+    "name": "Bandit",
+    "side": "defender",
+    "image": "bandit.png"
+  },
+  {
+    "id": "blackbeard",
+    "name": "Blackbeard",
+    "side": "attacker",
+    "image": "blackbeard.png"
+  },
+  {
+    "id": "blitz",
+    "name": "Blitz",
+    "side": "attacker",
+    "image": "blitz.png"
+  },
+  {
+    "id": "brava",
+    "name": "Brava",
+    "side": "attacker",
+    "image": "brava.png"
+  },
+  {
+    "id": "buck",
+    "name": "Buck",
+    "side": "attacker",
+    "image": "buck.png"
+  },
+  {
+    "id": "capitao",
+    "name": "Capitão",
+    "side": "attacker",
+    "image": "capitao.png"
+  },
+  {
+    "id": "castle",
+    "name": "Castle",
+    "side": "defender",
+    "image": "castle.png"
+  },
+  {
+    "id": "caveira",
+    "name": "Caveira",
+    "side": "defender",
+    "image": "caveira.png"
+  },
+  {
+    "id": "clash",
+    "name": "Clash",
+    "side": "defender",
+    "image": "clash.png"
+  },
+  {
+    "id": "deimos",
+    "name": "Deimos",
+    "side": "attacker",
+    "image": "deimos.png"
+  },
+  {
+    "id": "denari",
+    "name": "Denari",
+    "side": "defender",
+    "image": "denari.png"
+  },
+  {
+    "id": "doc",
+    "name": "Doc",
+    "side": "defender",
+    "image": "doc.png"
+  },
+  {
+    "id": "dokkaebi",
+    "name": "Dokkaebi",
+    "side": "attacker",
+    "image": "dokkaebi.png"
+  },
+  {
+    "id": "echo",
+    "name": "Echo",
+    "side": "defender",
+    "image": "echo.png"
+  },
+  {
+    "id": "ela",
+    "name": "Ela",
+    "side": "defender",
+    "image": "ela.png"
+  },
+  {
+    "id": "fenrir",
+    "name": "Fenrir",
+    "side": "defender",
+    "image": "fenrir.png"
+  },
+  {
+    "id": "finka",
+    "name": "Finka",
+    "side": "attacker",
+    "image": "finka.png"
+  },
+  {
+    "id": "flores",
+    "name": "Flores",
+    "side": "attacker",
+    "image": "flores.png"
+  },
+  {
+    "id": "frost",
+    "name": "Frost",
+    "side": "defender",
+    "image": "frost.png"
+  },
+  {
+    "id": "fuze",
+    "name": "Fuze",
+    "side": "attacker",
+    "image": "fuze.png"
+  },
+  {
+    "id": "glaz",
+    "name": "Glaz",
+    "side": "attacker",
+    "image": "glaz.png"
+  },
+  {
+    "id": "goyo",
+    "name": "Goyo",
+    "side": "defender",
+    "image": "goyo.png"
+  },
+  {
+    "id": "gridlock",
+    "name": "Gridlock",
+    "side": "attacker",
+    "image": "gridlock.png"
+  },
+  {
+    "id": "grim",
+    "name": "Grim",
+    "side": "attacker",
+    "image": "grim.png"
+  },
+  {
+    "id": "hibana",
+    "name": "Hibana",
+    "side": "attacker",
+    "image": "hibana.png"
+  },
+  {
+    "id": "iana",
+    "name": "Iana",
+    "side": "attacker",
+    "image": "iana.png"
+  },
+  {
+    "id": "iq",
+    "name": "IQ",
+    "side": "attacker",
+    "image": "iq.png"
+  },
+  {
+    "id": "jackal",
+    "name": "Jackal",
+    "side": "attacker",
+    "image": "jackal.png"
+  },
+  {
+    "id": "jager",
+    "name": "Jäger",
+    "side": "defender",
+    "image": "jager.png"
+  },
+  {
+    "id": "kaid",
+    "name": "Kaid",
+    "side": "defender",
+    "image": "kaid.png"
+  },
+  {
+    "id": "kali",
+    "name": "Kali",
+    "side": "attacker",
+    "image": "kali.png"
+  },
+  {
+    "id": "kapkan",
+    "name": "Kapkan",
+    "side": "defender",
+    "image": "kapkan.png"
+  },
+  {
+    "id": "lesion",
+    "name": "Lesion",
+    "side": "defender",
+    "image": "lesion.png"
+  },
+  {
+    "id": "lion",
+    "name": "Lion",
+    "side": "attacker",
+    "image": "lion.png"
+  },
+  {
+    "id": "maestro",
+    "name": "Maestro",
+    "side": "defender",
+    "image": "maestro.png"
+  },
+  {
+    "id": "maverick",
+    "name": "Maverick",
+    "side": "attacker",
+    "image": "maverick.png"
+  },
+  {
+    "id": "melusi",
+    "name": "Melusi",
+    "side": "defender",
+    "image": "melusi.png"
+  },
+  {
+    "id": "mira",
+    "name": "Mira",
+    "side": "defender",
+    "image": "mira.png"
+  },
+  {
+    "id": "montagne",
+    "name": "Montagne",
+    "side": "attacker",
+    "image": "montagne.png"
+  },
+  {
+    "id": "mozzie",
+    "name": "Mozzie",
+    "side": "defender",
+    "image": "mozzie.png"
+  },
+  {
+    "id": "mute",
+    "name": "Mute",
+    "side": "defender",
+    "image": "mute.png"
+  },
+  {
+    "id": "nokk",
+    "name": "Nøkk",
+    "side": "attacker",
+    "image": "nokk.png"
+  },
+  {
+    "id": "nomad",
+    "name": "Nomad",
+    "side": "attacker",
+    "image": "nomad.png"
+  },
+  {
+    "id": "oryx",
+    "name": "Oryx",
+    "side": "defender",
+    "image": "oryx.png"
+  },
+  {
+    "id": "osa",
+    "name": "Osa",
+    "side": "attacker",
+    "image": "osa.png"
+  },
+  {
+    "id": "pulse",
+    "name": "Pulse",
+    "side": "defender",
+    "image": "pulse.png"
+  },
+  {
+    "id": "ram",
+    "name": "Ram",
+    "side": "attacker",
+    "image": "ram.png"
+  },
+  {
+    "id": "rauora",
+    "name": "Rauora",
+    "side": "attacker",
+    "image": "rauora.png"
+  },
+  {
+    "id": "recruit_blue",
+    "name": "Recruit (Blue)",
+    "side": "both",
+    "image": "recruit_blue.png"
+  },
+  {
+    "id": "recruit_green",
+    "name": "Recruit (Green)",
+    "side": "both",
+    "image": "recruit_green.png"
+  },
+  {
+    "id": "recruit_orange",
+    "name": "Recruit (Orange)",
+    "side": "both",
+    "image": "recruit_orange.png"
+  },
+  {
+    "id": "recruit_red",
+    "name": "Recruit (Red)",
+    "side": "both",
+    "image": "recruit_red.png"
+  },
+  {
+    "id": "recruit_yellow",
+    "name": "Recruit (Yellow)",
+    "side": "both",
+    "image": "recruit_yellow.png"
+  },
+  {
+    "id": "rook",
+    "name": "Rook",
+    "side": "defender",
+    "image": "rook.png"
+  },
+  {
+    "id": "sens",
+    "name": "Sens",
+    "side": "attacker",
+    "image": "sens.png"
+  },
+  {
+    "id": "sentry",
+    "name": "Sentry",
+    "side": "defender",
+    "image": "sentry.png"
+  },
+  {
+    "id": "skopos",
+    "name": "Skopós",
+    "side": "attacker",
+    "image": "skopos.png"
+  },
+  {
+    "id": "sledge",
+    "name": "Sledge",
+    "side": "attacker",
+    "image": "sledge.png"
+  },
+  {
+    "id": "smoke",
+    "name": "Smoke",
+    "side": "defender",
+    "image": "smoke.png"
+  },
+  {
+    "id": "solis",
+    "name": "Solis",
+    "side": "defender",
+    "image": "solis.png"
+  },
+  {
+    "id": "striker",
+    "name": "Striker",
+    "side": "attacker",
+    "image": "striker.png"
+  },
+  {
+    "id": "tachanka",
+    "name": "Tachanka",
+    "side": "defender",
+    "image": "tachanka.png"
+  },
+  {
+    "id": "thatcher",
+    "name": "Thatcher",
+    "side": "attacker",
+    "image": "thatcher.png"
+  },
+  {
+    "id": "thermite",
+    "name": "Thermite",
+    "side": "attacker",
+    "image": "thermite.png"
+  },
+  {
+    "id": "thorn",
+    "name": "Thorn",
+    "side": "defender",
+    "image": "thorn.png"
+  },
+  {
+    "id": "thunderbird",
+    "name": "Thunderbird",
+    "side": "defender",
+    "image": "thunderbird.png"
+  },
+  {
+    "id": "tubarao",
+    "name": "Tubarão",
+    "side": "defender",
+    "image": "tubarao.png"
+  },
+  {
+    "id": "twitch",
+    "name": "Twitch",
+    "side": "attacker",
+    "image": "twitch.png"
+  },
+  {
+    "id": "valkyrie",
+    "name": "Valkyrie",
+    "side": "defender",
+    "image": "valkyrie.png"
+  },
+  {
+    "id": "vigil",
+    "name": "Vigil",
+    "side": "defender",
+    "image": "vigil.png"
+  },
+  {
+    "id": "wamai",
+    "name": "Wamai",
+    "side": "defender",
+    "image": "wamai.png"
+  },
+  {
+    "id": "warden",
+    "name": "Warden",
+    "side": "defender",
+    "image": "warden.png"
+  },
+  {
+    "id": "ying",
+    "name": "Ying",
+    "side": "attacker",
+    "image": "ying.png"
+  },
+  {
+    "id": "zero",
+    "name": "Zero",
+    "side": "attacker",
+    "image": "zero.png"
+  },
+  {
+    "id": "zofia",
+    "name": "Zofia",
+    "side": "attacker",
+    "image": "zofia.png"
+  }
+]

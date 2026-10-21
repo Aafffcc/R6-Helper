@@ -1,0 +1,10 @@
+[
+  { "id": "asia-pacific", "name": "Asia-Pacific League" },
+  { "id": "blast-major", "name": "Blast Major" },
+  { "id": "cn-league", "name": "CN League" },
+  { "id": "europe-mena", "name": "Europe & MENA League" },
+  { "id": "ewc", "name": "Esports World Cup" },
+  { "id": "north-america", "name": "North America League" },
+  { "id": "six-invitational", "name": "Six Invitational" },
+  { "id": "south-america", "name": "South America League" }
+]

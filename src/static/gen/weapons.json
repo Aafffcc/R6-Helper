@@ -1,0 +1,547 @@
+[
+  {
+    "id": "1911-tacops",
+    "name": "1911 Tacops",
+    "image": "1911-tacops.png"
+  },
+  {
+    "id": "416-c-carbine",
+    "name": "416 C Carbine",
+    "image": "416-c-carbine.png"
+  },
+  {
+    "id": "417",
+    "name": "417",
+    "image": "417.png"
+  },
+  {
+    "id": "44-mag-semi-auto",
+    "name": "44 Mag Semi Auto",
+    "image": "44-mag-semi-auto.png"
+  },
+  {
+    "id": "44-vendetta",
+    "name": "44 Vendetta",
+    "image": "44-vendetta.png"
+  },
+  {
+    "id": "552-commando",
+    "name": "552 Commando",
+    "image": "552-commando.png"
+  },
+  {
+    "id": "556xi",
+    "name": "556xi",
+    "image": "556xi.png"
+  },
+  {
+    "id": "6p41",
+    "name": "6p41",
+    "image": "6p41.png"
+  },
+  {
+    "id": "9-19vsn",
+    "name": "9 19vsn",
+    "image": "9-19vsn.png"
+  },
+  {
+    "id": "9mm-c1",
+    "name": "9mm C1",
+    "image": "9mm-c1.png"
+  },
+  {
+    "id": "acs12",
+    "name": "Acs12",
+    "image": "acs12.png"
+  },
+  {
+    "id": "ak-12",
+    "name": "Ak 12",
+    "image": "ak-12.png"
+  },
+  {
+    "id": "ak-74",
+    "name": "Ak 74",
+    "image": "ak-74.png"
+  },
+  {
+    "id": "alda-5-56",
+    "name": "Alda 5 56",
+    "image": "alda-5-56.png"
+  },
+  {
+    "id": "ar-15-50",
+    "name": "Ar 15 50",
+    "image": "ar-15-50.png"
+  },
+  {
+    "id": "ar33",
+    "name": "Ar33",
+    "image": "ar33.png"
+  },
+  {
+    "id": "arx200",
+    "name": "Arx200",
+    "image": "arx200.png"
+  },
+  {
+    "id": "aug-para",
+    "name": "Aug Para",
+    "image": "aug-para.png"
+  },
+  {
+    "id": "aug",
+    "name": "Aug",
+    "image": "aug.png"
+  },
+  {
+    "id": "bailiff-410",
+    "name": "Bailiff 410",
+    "image": "bailiff-410.png"
+  },
+  {
+    "id": "bearing-9",
+    "name": "Bearing 9",
+    "image": "bearing-9.png"
+  },
+  {
+    "id": "benelli-m3",
+    "name": "Benelli M3",
+    "image": "benelli-m3.png"
+  },
+  {
+    "id": "bosg-12-2",
+    "name": "Bosg 12 2",
+    "image": "bosg-12-2.png"
+  },
+  {
+    "id": "c75-auto",
+    "name": "C75 Auto",
+    "image": "c75-auto.png"
+  },
+  {
+    "id": "c7e",
+    "name": "C7e",
+    "image": "c7e.png"
+  },
+  {
+    "id": "c8-sfw",
+    "name": "C8 Sfw",
+    "image": "c8-sfw.png"
+  },
+  {
+    "id": "commando-9",
+    "name": "Commando 9",
+    "image": "commando-9.png"
+  },
+  {
+    "id": "csrx-300",
+    "name": "Csrx 300",
+    "image": "csrx-300.png"
+  },
+  {
+    "id": "desert-eagle",
+    "name": "Desert Eagle",
+    "image": "desert-eagle.png"
+  },
+  {
+    "id": "dp27",
+    "name": "Dp27",
+    "image": "dp27.png"
+  },
+  {
+    "id": "f90",
+    "name": "F90",
+    "image": "f90.png"
+  },
+  {
+    "id": "famas",
+    "name": "Famas",
+    "image": "famas.png"
+  },
+  {
+    "id": "five-seven",
+    "name": "Five Seven",
+    "image": "five-seven.png"
+  },
+  {
+    "id": "fmg-9",
+    "name": "Fmg 9",
+    "image": "fmg-9.png"
+  },
+  {
+    "id": "fo-12",
+    "name": "Fo 12",
+    "image": "fo-12.png"
+  },
+  {
+    "id": "g36c",
+    "name": "G36c",
+    "image": "g36c.png"
+  },
+  {
+    "id": "glaive-12",
+    "name": "Glaive 12",
+    "image": "glaive-12.webp"
+  },
+  {
+    "id": "glock",
+    "name": "Glock",
+    "image": "glock.webp"
+  },
+  {
+    "id": "gsh-18",
+    "name": "Gsh 18",
+    "image": "gsh-18.png"
+  },
+  {
+    "id": "hk21",
+    "name": "Hk21",
+    "image": "hk21.png"
+  },
+  {
+    "id": "ita12l",
+    "name": "Ita12l",
+    "image": "ita12l.png"
+  },
+  {
+    "id": "ita12s",
+    "name": "Ita12s",
+    "image": "ita12s.png"
+  },
+  {
+    "id": "k1a",
+    "name": "K1a",
+    "image": "k1a.png"
+  },
+  {
+    "id": "keratos",
+    "name": "Keratos",
+    "image": "keratos.png"
+  },
+  {
+    "id": "l1a1",
+    "name": "L1a1",
+    "image": "l1a1.png"
+  },
+  {
+    "id": "l85",
+    "name": "L85",
+    "image": "l85.png"
+  },
+  {
+    "id": "lfp586",
+    "name": "Lfp586",
+    "image": "lfp586.png"
+  },
+  {
+    "id": "lmg-e",
+    "name": "Lmg E",
+    "image": "lmg-e.png"
+  },
+  {
+    "id": "m1014",
+    "name": "M1014",
+    "image": "m1014.png"
+  },
+  {
+    "id": "m12",
+    "name": "M12",
+    "image": "m12.png"
+  },
+  {
+    "id": "m249",
+    "name": "M249",
+    "image": "m249.png"
+  },
+  {
+    "id": "m4",
+    "name": "M4",
+    "image": "m4.png"
+  },
+  {
+    "id": "m45-meusoc",
+    "name": "M45 Meusoc",
+    "image": "m45-meusoc.png"
+  },
+  {
+    "id": "m500",
+    "name": "M500",
+    "image": "m500.png"
+  },
+  {
+    "id": "m762",
+    "name": "M762",
+    "image": "m762.png"
+  },
+  {
+    "id": "m870",
+    "name": "M870",
+    "image": "m870.png"
+  },
+  {
+    "id": "mac-11",
+    "name": "Mac 11",
+    "image": "mac-11.png"
+  },
+  {
+    "id": "mk-14-ebr",
+    "name": "Mk 14 Ebr",
+    "image": "mk-14-ebr.png"
+  },
+  {
+    "id": "mk1-9mm",
+    "name": "Mk1 9mm",
+    "image": "mk1-9mm.png"
+  },
+  {
+    "id": "mp5",
+    "name": "Mp5",
+    "image": "mp5.png"
+  },
+  {
+    "id": "mp5k",
+    "name": "Mp5k",
+    "image": "mp5k.png"
+  },
+  {
+    "id": "mp5sd",
+    "name": "Mp5sd",
+    "image": "mp5sd.png"
+  },
+  {
+    "id": "mp7",
+    "name": "Mp7",
+    "image": "mp7.png"
+  },
+  {
+    "id": "mp9",
+    "name": "Mp9",
+    "image": "mp9.png"
+  },
+  {
+    "id": "mpx",
+    "name": "Mpx",
+    "image": "mpx.png"
+  },
+  {
+    "id": "mx4-storm",
+    "name": "Mx4 Storm",
+    "image": "mx4-storm.png"
+  },
+  {
+    "id": "ots-03",
+    "name": "Ots 03",
+    "image": "ots-03.png"
+  },
+  {
+    "id": "p-10c",
+    "name": "P 10c",
+    "image": "p-10c.png"
+  },
+  {
+    "id": "p10-roni",
+    "name": "P10 Roni",
+    "image": "p10-roni.png"
+  },
+  {
+    "id": "p12",
+    "name": "P12",
+    "image": "p12.png"
+  },
+  {
+    "id": "p226",
+    "name": "P226",
+    "image": "p226.png"
+  },
+  {
+    "id": "p229",
+    "name": "P229",
+    "image": "p229.png"
+  },
+  {
+    "id": "p9",
+    "name": "P9",
+    "image": "p9.png"
+  },
+  {
+    "id": "p90",
+    "name": "P90",
+    "image": "p90.png"
+  },
+  {
+    "id": "para-308",
+    "name": "Para 308",
+    "image": "para-308.png"
+  },
+  {
+    "id": "pcx-33",
+    "name": "Pcx 33",
+    "image": "pcx-33.webp"
+  },
+  {
+    "id": "pdw9",
+    "name": "Pdw9",
+    "image": "pdw9.png"
+  },
+  {
+    "id": "pmm",
+    "name": "Pmm",
+    "image": "pmm.png"
+  },
+  {
+    "id": "pmr90a2",
+    "name": "Pmr90a2",
+    "image": "pmr90a2.webp"
+  },
+  {
+    "id": "pof-9",
+    "name": "Pof 9",
+    "image": "pof-9.webp"
+  },
+  {
+    "id": "prb92",
+    "name": "Prb92",
+    "image": "prb92.png"
+  },
+  {
+    "id": "q-929",
+    "name": "Q 929",
+    "image": "q-929.png"
+  },
+  {
+    "id": "r4-c",
+    "name": "R4 C",
+    "image": "r4-c.png"
+  },
+  {
+    "id": "rg15",
+    "name": "Rg15",
+    "image": "rg15.png"
+  },
+  {
+    "id": "sasg-12",
+    "name": "Sasg 12",
+    "image": "sasg-12.png"
+  },
+  {
+    "id": "sc3000k",
+    "name": "Sc3000k",
+    "image": "sc3000k.png"
+  },
+  {
+    "id": "scar-h-cqc",
+    "name": "Scar H Cqc",
+    "image": "scar-h-cqc.png"
+  },
+  {
+    "id": "scorpion-evo-3-a1",
+    "name": "Scorpion Evo 3 A1",
+    "image": "scorpion-evo-3-a1.png"
+  },
+  {
+    "id": "sdp-9mm",
+    "name": "Sdp 9mm",
+    "image": "sdp-9mm.png"
+  },
+  {
+    "id": "sg-cqb",
+    "name": "Sg Cqb",
+    "image": "sg-cqb.png"
+  },
+  {
+    "id": "six12",
+    "name": "Six12",
+    "image": "six12.png"
+  },
+  {
+    "id": "smg-12",
+    "name": "Smg 12",
+    "image": "smg-12.png"
+  },
+  {
+    "id": "spas-12",
+    "name": "Spas 12",
+    "image": "spas-12.png"
+  },
+  {
+    "id": "spas-15",
+    "name": "Spas 15",
+    "image": "spas-15.png"
+  },
+  {
+    "id": "spear-308",
+    "name": "Spear 308",
+    "image": "spear-308.png"
+  },
+  {
+    "id": "sr-25",
+    "name": "Sr 25",
+    "image": "sr-25.png"
+  },
+  {
+    "id": "super-shorty",
+    "name": "Super Shorty",
+    "image": "super-shorty.png"
+  },
+  {
+    "id": "supernova",
+    "name": "Supernova",
+    "image": "supernova.png"
+  },
+  {
+    "id": "t-5-smg",
+    "name": "T 5 Smg",
+    "image": "t-5-smg.png"
+  },
+  {
+    "id": "t-95-lsw",
+    "name": "T 95 Lsw",
+    "image": "t-95-lsw.png"
+  },
+  {
+    "id": "tacit-45",
+    "name": "Tacit 45",
+    "image": "tacit-45.webp"
+  },
+  {
+    "id": "tcsg12",
+    "name": "Tcsg12",
+    "image": "tcsg12.png"
+  },
+  {
+    "id": "type-89-f",
+    "name": "Type 89 F",
+    "image": "type-89-f.png"
+  },
+  {
+    "id": "ump",
+    "name": "Ump",
+    "image": "ump.png"
+  },
+  {
+    "id": "usp",
+    "name": "Usp",
+    "image": "usp.png"
+  },
+  {
+    "id": "uzi",
+    "name": "Uzi",
+    "image": "uzi.png"
+  },
+  {
+    "id": "v308",
+    "name": "V308",
+    "image": "v308.png"
+  },
+  {
+    "id": "vector-45-acp",
+    "name": "Vector 45 Acp",
+    "image": "vector-45-acp.png"
+  },
+  {
+    "id": "xk23",
+    "name": "Xk23",
+    "image": "xk23.webp"
+  }
+]

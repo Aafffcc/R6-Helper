@@ -1,0 +1,21 @@
+{
+  "name": "R6-Helper",
+  "appid": "",
+  "description": "彩虹六号战绩查询助手",
+  "versionName": "0.1.0",
+  "versionCode": "1",
+  "vueVersion": "3",
+  "locale": "zh-Hans",
+  "mp-weixin": {
+    "appid": "",
+    "setting": {
+      "urlCheck": false,
+      "es6": true,
+      "minified": true
+    },
+    "usingComponents": true
+  },
+  "h5": {
+    "title": "R6-Helper"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "R6-Helper"
+      }
+    },
+    {
+      "path": "pages/player/player",
+      "style": {
+        "navigationBarTitleText": "战绩详情"
+      }
+    },
+    {
+      "path": "pages/operators/operators",
+      "style": {
+        "navigationBarTitleText": "操作员图鉴"
+      }
+    }
+  ],
+  "tabBar": {
+    "color": "#9aa1ac",
+    "selectedColor": "#ff8c1a",
+    "backgroundColor": "#16181d",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "战绩"
+      },
+      {
+        "pagePath": "pages/operators/operators",
+        "text": "操作员"
+      }
+    ]
+  },
+  "globalStyle": {
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "R6-Helper",
+    "navigationBarBackgroundColor": "#16181d",
+    "backgroundColor": "#16181d"
+  }
+}

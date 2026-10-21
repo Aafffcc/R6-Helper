@@ -1,0 +1,43 @@
+{
+  "bsonType": "object",
+  "required": ["cacheKey", "platform", "nickname", "data", "fetchedAt", "expiresAt"],
+  "permission": {
+    "read": false,
+    "create": false,
+    "update": false,
+    "delete": false,
+    "count": false
+  },
+  "properties": {
+    "_id": {
+      "description": "由 stats-core.normalizeCacheKey 生成的确定性缓存键"
+    },
+    "cacheKey": {
+      "bsonType": "string",
+      "description": "与 _id 一致，platform + 昵称归一化结果"
+    },
+    "platform": {
+      "bsonType": "string",
+      "enum": ["pc", "psn", "xbox"],
+      "description": "查询平台"
+    },
+    "nickname": {
+      "bsonType": "string",
+      "minLength": 1,
+      "maxLength": 32,
+      "description": "查询昵称（已裁剪）"
+    },
+    "data": {
+      "bsonType": "object",
+      "description": "NormalizedPlayerStats 归一化战绩，结构见 stats-core/index.d.ts"
+    },
+    "fetchedAt": {
+      "bsonType": "long",
+      "description": "上游取数时间戳（毫秒）"
+    },
+    "expiresAt": {
+      "bsonType": "long",
+      "description": "缓存过期时间戳（毫秒）；有效期口径见 stats-core.STATS_CACHE_TTL_MS"
+    }
+  }
+}

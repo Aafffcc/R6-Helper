@@ -1,0 +1,10 @@
+# 规范要求 LF：任何平台 checkout 都保持 LF，避免行尾抖动
+* text=auto eol=lf
+
+# 二进制资产不做任何转换
+*.png binary
+*.webp binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary

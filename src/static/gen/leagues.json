@@ -1,0 +1,42 @@
+[
+  {
+    "id": "asia-pacific",
+    "name": "Asia-Pacific League",
+    "image": "asia-pacific.png"
+  },
+  {
+    "id": "blast-major",
+    "name": "Blast Major",
+    "image": "blast-major.png"
+  },
+  {
+    "id": "cn-league",
+    "name": "CN League",
+    "image": "cn-league.png"
+  },
+  {
+    "id": "europe-mena",
+    "name": "Europe & MENA League",
+    "image": "europe-mena.png"
+  },
+  {
+    "id": "ewc",
+    "name": "Esports World Cup",
+    "image": "ewc.png"
+  },
+  {
+    "id": "north-america",
+    "name": "North America League",
+    "image": "north-america.png"
+  },
+  {
+    "id": "six-invitational",
+    "name": "Six Invitational",
+    "image": "six-invitational.png"
+  },
+  {
+    "id": "south-america",
+    "name": "South America League",
+    "image": "south-america.png"
+  }
+]

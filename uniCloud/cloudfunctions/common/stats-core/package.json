@@ -1,0 +1,8 @@
+{
+  "name": "stats-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "R6-Helper 战绩归一化与上游适配纯逻辑公共模块",
+  "main": "index.js",
+  "types": "index.d.ts"
+}

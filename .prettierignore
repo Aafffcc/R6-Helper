@@ -1,0 +1,6 @@
+node_modules/
+dist/
+unpackage/
+data/
+src/static/gen/
+package-lock.json
