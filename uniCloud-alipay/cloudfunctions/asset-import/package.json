@@ -1,0 +1,9 @@
+{
+  "name": "asset-import",
+  "version": "0.1.0",
+  "description": "图鉴资产一次性导入云函数（配合 scripts/upload-assets-to-unicloud.mjs 使用）",
+  "main": "index.js",
+  "dependencies": {
+    "uni-config-center": "file:../common/uni-config-center"
+  }
+}

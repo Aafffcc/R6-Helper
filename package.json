@@ -12,6 +12,8 @@
     "build:mp-weixin": "uni build -p mp-weixin",
     "build:h5": "uni build",
     "gen:static-data": "node scripts/generate-static-data.mjs",
+    "gen:fetch-metadata": "node scripts/fetch-arenyze-metadata.mjs",
+    "gen:upload-assets": "node scripts/upload-assets-to-unicloud.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",

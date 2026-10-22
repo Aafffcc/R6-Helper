@@ -34,7 +34,7 @@
 
 - `src/pages` 只负责页面状态与交互；对云对象的调用统一封装在 `src/services`；纯转换逻辑放在 `src/utils`，必须可脱离 uni-app 运行时单独测试。
 - `uniCloud-alipay/cloudfunctions` 中每个云对象一个职责（目录名带云厂商后缀是 HBuilderX 识别要求）。战绩归一化、来源适配是纯逻辑，放在可独立测试的公共模块中，云对象只做参数校验和调用编排。
-- 上游数据源凭据（当前为 arenyze API key）只存放在 `uni-config-center`（r6-upstream 插件，真实 config.json 已 gitignore）或云函数环境配置中，禁止出现在仓库、前端代码、数据库文档和日志里。小程序端不得保存任何来源密钥。
+- 上游数据源凭据（当前为 arenyze API key）只存放在 `uni-config-center`（r6-upstream 插件，真实 config.json 已 gitignore）或云函数环境配置中，禁止出现在仓库、前端代码、数据库文档和日志里。小程序端不得保存任何来源密钥。`asset-import` 导入 token 同样只存 `uni-config-center`（asset-import 插件），本地与云端两份必须一致。
 - 外部输入首先用 `unknown` 接收并验证，禁止用 `any` 绕过检查。云对象入参用 schema 或手写校验先行收敛。
 - 不更改接口字段、缓存键、来源口径或错误码来满足格式规则。RP 和 MMR 分开；未知数据不填零；当前赛季不回退历史。
 - 数据库读写走 DB Schema：权限默认拒绝、按需放行，字段校验写在 schema；禁止绕过 schema 在云函数里私改口径。
@@ -51,7 +51,8 @@
 ## 维护范围
 
 - 维护源码、测试、脚本和公共配置；不手工修改 `node_modules`、`dist`、`unpackage` 和生成数据。
-- 操作员、武器等静态数据由维护脚本生成：改数据先改脚本或源头文件，不直接编辑产物。
+- 操作员、武器等静态数据由维护脚本生成：改数据先改脚本或源头文件，不直接编辑产物。地图/皮肤/挂件的源清单由 `npm run gen:fetch-metadata` 从 arenyze 元数据端点一次性烘焙（消耗月度配额，勿频繁重跑），人工只往 `data/maps|skins|charms/` 补图后重跑 `npm run gen:static-data`；这三类上游无图源，条目允许 `image` 为 `null`，展示层必须降级为占位块。
+- 图鉴图片托管走 uniCloud 云存储：`asset-import` 云函数（URL 化 + uni-config-center token 校验，cloudPath 类目白名单）+ `npm run gen:upload-assets` 批量上传；迁移完成后关闭 URL 化。`VITE_ASSET_BASE_URL` 留空时全类目降级占位块。
 - `.env.local`、私有配置和 IDE 本地状态属于本机环境，不批量格式化、不提交。
 - 纯重构保持功能行为，归一化结果与旧版对齐；发现行为差异或缺陷时，用明确的回归测试验证后再合入。
 - 仓库托管在 GitHub（Aafffcc/R6-Helper），批量修改前确保工作区干净、可随时回退。
