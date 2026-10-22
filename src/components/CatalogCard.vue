@@ -7,6 +7,8 @@ import type { CatalogEntry } from '@/types/catalog';
 const props = defineProps<{
   entry: CatalogEntry;
   category: string;
+  /** 名称下方的补充说明行（如皮肤稀有度/赛季），缺省不渲染 */
+  caption?: string | null;
 }>();
 
 const imageFailed = ref(false);
@@ -33,6 +35,7 @@ function onImageError() {
       <text class="catalog-card__initials">{{ initials }}</text>
     </view>
     <text class="catalog-card__name">{{ entry.name }}</text>
+    <text v-if="caption" class="catalog-card__caption">{{ caption }}</text>
   </view>
 </template>
 
@@ -73,5 +76,15 @@ function onImageError() {
   margin-top: 12rpx;
   font-size: 26rpx;
   color: $r6-text-primary;
+}
+
+.catalog-card__caption {
+  max-width: 100%;
+  margin-top: 4rpx;
+  overflow: hidden;
+  font-size: 22rpx;
+  color: $r6-text-secondary;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 </style>
