@@ -23,7 +23,8 @@ const ASSET_CATEGORIES = new Set([
   'charms',
 ]);
 // cloudPath 形如 operators/ace.png：类目白名单 + 图片文件名白名单
-const CLOUD_PATH_PATTERN = /^([a-z0-9-]+)\/([a-z0-9-]+\.(png|webp))$/;
+// 文件名段允许下划线（recruit_blue 等 recruit_* 系列资产）
+const CLOUD_PATH_PATTERN = /^([a-z0-9-]+)\/([a-z0-9_-]+\.(png|webp))$/;
 const MAX_BATCH_FILES = 12;
 
 let importToken = null;
