@@ -7,7 +7,8 @@
  * - RP 与 MMR 是两个独立维度，字段分开存放，互不推断；
  * - 未知数据一律置 null，禁止填零；
  * - 上游适配层只产出“当前赛季”数据，本模块不做历史赛季回退；
- * - 胜率 = wins / (wins + losses)，K/D = kills / deaths，仅在双端已知时计算。
+ * - 胜率 = wins / (wins + losses)，K/D = kills / deaths，仅在双端已知时计算；
+ * - 比例字段（winRate / hsPercent）统一为 0..1 口径。
  */
 
 const STATS_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -17,6 +18,17 @@ const PLATFORMS = ['pc', 'psn', 'xbox'];
 const DEFAULT_PLATFORM = 'pc';
 
 const NICKNAME_MAX_LENGTH = 32;
+
+// RP 历史点数上限：保护缓存文档体积，超出时保留最近的数据点
+const RP_HISTORY_MAX_POINTS = 500;
+
+const ARENYZE_DEFAULT_BASE_URL = 'https://public-api.arenyze.com/r6/api';
+const ARENYZE_REQUEST_TIMEOUT_MS = 15 * 1000;
+
+// 应用侧平台 → arenyze platformType 口径
+const ARENYZE_PLATFORM_BY_APP = { pc: 'uplay', psn: 'psn', xbox: 'xbl' };
+// arenyze platformType → 应用侧平台，用于 identity 回填
+const APP_PLATFORM_BY_ARENYZE = { uplay: 'pc', psn: 'psn', xbl: 'xbox' };
 
 function isPlainObject(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -48,6 +60,84 @@ function toTrimmedString(value) {
   }
   const trimmed = value.trim();
   return trimmed === '' ? null : trimmed;
+}
+
+/**
+ * 比例口径归一：统一为 0..1。0..1 的小数视为比例原样保留；1..100 视为
+ * 百分数（如 57.89 表示 57.89%）除以 100；超过 100 或负数视为未知归 null。
+ */
+function normalizeRatio(value) {
+  const num = toFiniteNumber(value);
+  if (num === null || num < 0 || num > 100) {
+    return null;
+  }
+  return num > 1 ? num / 100 : num;
+}
+
+/**
+ * 历史时间戳归一为毫秒。真实口径（arenyze 实测）为 ISO 8601 字符串，
+ * 同时兼容毫秒（> 1e12）与秒（1e9..1e12）数值；其余归 null。
+ */
+function normalizeHistoryTimestamp(value) {
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Date.parse(value.trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  const num = toFiniteNumber(value);
+  if (num === null || num <= 0) {
+    return null;
+  }
+  if (num > 1e12) {
+    return num;
+  }
+  if (num > 1e9) {
+    return num * 1000;
+  }
+  return null;
+}
+
+/**
+ * RP 历史归一：接受 [timestamp, { value, metadata }] 元组数组，也接受
+ * 已归一的 { timestamp, rp, rank } 点对象（幂等，适配器产出会二次归一）。
+ * 非法点与无数据点跳过，超出上限保留最近数据。
+ */
+function normalizeRpHistory(raw) {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const points = [];
+  for (const entry of raw) {
+    if (isPlainObject(entry)) {
+      const rp = toFiniteNumber(entry.rp);
+      const rank = toTrimmedString(entry.rank);
+      if (rp === null && rank === null) {
+        continue;
+      }
+      points.push({
+        timestamp: normalizeHistoryTimestamp(entry.timestamp),
+        rp,
+        rank,
+      });
+      continue;
+    }
+    if (!Array.isArray(entry) || entry.length < 2) {
+      continue;
+    }
+    const detail = isPlainObject(entry[1]) ? entry[1] : {};
+    const metadata = isPlainObject(detail.metadata) ? detail.metadata : {};
+    const rp = toFiniteNumber(detail.value);
+    const rank = toTrimmedString(metadata.rank);
+    // rp 与 rank 双缺失的点对图表无用，直接丢弃
+    if (rp === null && rank === null) {
+      continue;
+    }
+    points.push({
+      timestamp: normalizeHistoryTimestamp(entry[0]),
+      rp,
+      rank,
+    });
+  }
+  return points.slice(-RP_HISTORY_MAX_POINTS);
 }
 
 function computeWinRate(wins, losses) {
@@ -122,6 +212,8 @@ function normalizeRankedSummary(raw) {
       kills: raw.kills,
       deaths: raw.deaths,
     }),
+    hsPercent: normalizeRatio(raw.hsPercent),
+    rpHistory: normalizeRpHistory(raw.rpHistory),
   };
 }
 
@@ -135,6 +227,7 @@ function normalizeUpstreamStats(raw, fallbackIdentity) {
     identity: normalizeIdentity(source.identity, fallbackIdentity),
     ranked: normalizeRankedSummary(source.ranked),
     casual: normalizeModeStats(source.casual),
+    unranked: normalizeModeStats(source.unranked),
   };
 }
 
@@ -179,15 +272,335 @@ function normalizeCacheKey(platform, nickname) {
   return `${platform}_${seed}_${slug === '' ? 'anon' : slug}`;
 }
 
+/* ------------------------------------------------------------------ *
+ * arenyze 上游适配（v2/profile）
+ *
+ * 响应字段口径以 https://r6.arenyze.com/api-docs 为准；文档未展开的
+ * 嵌套结构按多层回退路径抽取，全部失败时逐字段降级 null。
+ * 首次真实联调后如发现结构差异，只调整本节的 extract 系列函数并补回归用例。
+ * ------------------------------------------------------------------ */
+
+function collectBoardProfiles(payload) {
+  // 遍历 stats.platform_families_full_profiles 下的所有榜单档位档案，
+  // 兼容 board_ids_full_profiles 中间层存在或缺省两种嵌套。
+  const result = [];
+  const families = payload?.stats?.platform_families_full_profiles;
+  if (!Array.isArray(families)) {
+    return result;
+  }
+  for (const family of families) {
+    if (!isPlainObject(family)) {
+      continue;
+    }
+    const boardGroups = Array.isArray(family.board_ids_full_profiles)
+      ? family.board_ids_full_profiles
+      : [family];
+    for (const board of boardGroups) {
+      if (!isPlainObject(board) || !Array.isArray(board.full_profiles)) {
+        continue;
+      }
+      const boardId = toTrimmedString(board.board_id) ?? '';
+      for (const item of board.full_profiles) {
+        if (isPlainObject(item) && isPlainObject(item.profile)) {
+          result.push({ boardId, profile: item.profile });
+        }
+      }
+    }
+  }
+  return result;
+}
+
+function pickBoardProfile(collected, match) {
+  const hit = collected.find((entry) => match(entry.boardId.toLowerCase()));
+  return hit ? hit.profile : null;
+}
+
+function extractRpHistory(payload) {
+  const rawHistory = payload?.history?.data?.history?.data;
+  const points = normalizeRpHistory(Array.isArray(rawHistory) ? rawHistory : []);
+  // 实测上游按新→旧排序，契约统一为时间升序（图表最新点在最右）
+  return [...points].sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
+}
+
+/** seasons.data.metadata.currentSeason（实测为数字，如 43），缺失归 null */
+function findCurrentSeasonNumber(payload) {
+  return toFiniteNumber(payload?.seasons?.data?.metadata?.currentSeason);
+}
+
 /**
- * 上游客户端工厂。当前上游尚未接入：凭据来源、字段口径确定前，
- * 一律返回 E_UPSTREAM_NOT_CONFIGURED，由调用方决定提示方式。
+ * 实测口径：segments 含全部历史赛季（attributes.season + gamemode），
+ * 统计字段是 { value } 包装且胜负字段名为 matchesWon / matchesLost。
+ * 只匹配当前赛季分段，遵守“不回退历史”口径；currentSeason 缺失时
+ * 退回首个匹配（响应按新赛季在前排序）。
  */
-function createUpstreamClient(_config) {
+function findSeasonSegment(payload, gamemode) {
+  const segments = payload?.seasons?.data?.segments;
+  if (!Array.isArray(segments)) {
+    return null;
+  }
+  const currentSeason = findCurrentSeasonNumber(payload);
+  if (currentSeason !== null) {
+    for (const segment of segments) {
+      if (!isPlainObject(segment) || !isPlainObject(segment.stats)) {
+        continue;
+      }
+      const season = toFiniteNumber(segment.attributes?.season);
+      if (segment.attributes?.gamemode === gamemode && season === currentSeason) {
+        return segment;
+      }
+    }
+    return null;
+  }
+  for (const segment of segments) {
+    if (
+      isPlainObject(segment) &&
+      isPlainObject(segment.stats) &&
+      segment.attributes?.gamemode === gamemode
+    ) {
+      return segment;
+    }
+  }
+  return null;
+}
+
+/** 分段统计读取：兼容 { value } 包装与裸数值，按候选字段名依次取值 */
+function readSegmentStat(stats, keys) {
+  for (const key of keys) {
+    const entry = stats[key];
+    const value = isPlainObject(entry) ? toFiniteNumber(entry.value) : toFiniteNumber(entry);
+    if (value !== null) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function extractSeasonId(payload) {
+  const metadata = payload?.seasons?.data?.metadata;
+  const id = toTrimmedString(metadata?.id);
+  if (id !== null) {
+    return id;
+  }
+  const currentSeason = findCurrentSeasonNumber(payload);
+  return currentSeason !== null ? String(currentSeason) : null;
+}
+
+function extractSeasonName(payload) {
+  const rankedSegment = findSeasonSegment(payload, 'pvp_ranked');
+  const seasonData = payload?.seasons?.data;
+  const candidates = [
+    rankedSegment?.metadata?.seasonName,
+    rankedSegment?.metadata?.name,
+    seasonData?.metadata?.name,
+    seasonData?.metadata?.seasonName,
+    Array.isArray(seasonData?.segments) ? seasonData.segments[0]?.metadata?.name : null,
+  ];
+  for (const candidate of candidates) {
+    const name = toTrimmedString(candidate);
+    if (name !== null) {
+      return name;
+    }
+  }
+  return null;
+}
+
+function extractRankedFromProfile(payload) {
+  const collected = collectBoardProfiles(payload);
+  const board = pickBoardProfile(
+    collected,
+    (boardId) => boardId.includes('ranked') && !boardId.includes('unrank'),
+  );
+  const history = extractRpHistory(payload);
+  // arenyze 榜单档案里 rank 是数字段位 ID；当前段位名取 RP 历史最新点名
+  let rankName = null;
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    if (history[i].rank !== null) {
+      rankName = history[i].rank;
+      break;
+    }
+  }
+  if (board === null) {
+    // 榜单缺失时从当前赛季 pvp_ranked 分段兜底（实测统计为 {value} 包装）
+    const segment = findSeasonSegment(payload, 'pvp_ranked');
+    if (segment === null) {
+      return null;
+    }
+    const segmentStats = segment.stats;
+    return {
+      seasonId: extractSeasonId(payload),
+      seasonName: extractSeasonName(payload),
+      rankName: toTrimmedString(segment.metadata?.rank),
+      rp: {
+        current: readSegmentStat(segmentStats, ['rankPoints', 'rank_points']),
+        max: readSegmentStat(segmentStats, ['maxRankPoints', 'max_rank_points']),
+      },
+      // arenyze profile 不提供 MMR：独立维度保持未知，不推断不填零
+      mmr: { current: null, peak: null },
+      wins: readSegmentStat(segmentStats, ['wins', 'matchesWon']),
+      losses: readSegmentStat(segmentStats, ['losses', 'matchesLost']),
+      kills: readSegmentStat(segmentStats, ['kills']),
+      deaths: readSegmentStat(segmentStats, ['deaths']),
+      hsPercent: null,
+      rpHistory: [],
+    };
+  }
+  return {
+    seasonId: extractSeasonId(payload),
+    seasonName: extractSeasonName(payload),
+    rankName,
+    rp: {
+      current: toFiniteNumber(board.rank_points),
+      max: toFiniteNumber(board.max_rank_points),
+    },
+    wins: toFiniteNumber(board.wins),
+    losses: toFiniteNumber(board.losses),
+    kills: toFiniteNumber(board.kills),
+    deaths: toFiniteNumber(board.deaths),
+    hsPercent: toFiniteNumber(board.headshotPercent),
+    rpHistory: history,
+  };
+}
+
+function extractModeFromSegments(payload, gamemode) {
+  const segment = findSeasonSegment(payload, gamemode);
+  if (segment === null) {
+    return null;
+  }
+  const segmentStats = segment.stats;
+  return normalizeModeStats({
+    wins: readSegmentStat(segmentStats, ['wins', 'matchesWon']),
+    losses: readSegmentStat(segmentStats, ['losses', 'matchesLost']),
+    kills: readSegmentStat(segmentStats, ['kills']),
+    deaths: readSegmentStat(segmentStats, ['deaths']),
+  });
+}
+
+function extractIdentityFromProfile(payload, query) {
+  const player = isPlainObject(payload.player) ? payload.player : {};
+  const account = isPlainObject(payload.account) ? payload.account : {};
+  const platformType = toTrimmedString(player.platformType);
+  return {
+    nickname: toTrimmedString(player.nameOnPlatform) ?? query.nickname,
+    // identity.platform 是应用侧口径，arenyze 的 uplay/xbl 需映射回来
+    platform: (platformType !== null && APP_PLATFORM_BY_ARENYZE[platformType]) || query.platform,
+    profileId: toTrimmedString(player.profileId),
+    avatarUrl: toTrimmedString(account.profilePicture),
+    level: toFiniteNumber(account.level),
+  };
+}
+
+function buildRawStatsFromProfile(payload, query) {
+  if (!isPlainObject(payload)) {
+    throw createCoreError('E_UPSTREAM_ERROR', '上游响应结构异常：非对象');
+  }
+  const collected = collectBoardProfiles(payload);
+  const casualBoard = pickBoardProfile(collected, (boardId) => boardId.includes('casual'));
+  const unrankedBoard = pickBoardProfile(
+    collected,
+    (boardId) => boardId.includes('standard') || boardId.includes('unrank'),
+  );
+  return {
+    identity: extractIdentityFromProfile(payload, query),
+    ranked: extractRankedFromProfile(payload),
+    casual:
+      casualBoard !== null
+        ? normalizeModeStats({
+            wins: casualBoard.wins,
+            losses: casualBoard.losses,
+            kills: casualBoard.kills,
+            deaths: casualBoard.deaths,
+          })
+        : extractModeFromSegments(payload, 'pvp_casual'),
+    unranked:
+      unrankedBoard !== null
+        ? normalizeModeStats({
+            wins: unrankedBoard.wins,
+            losses: unrankedBoard.losses,
+            kills: unrankedBoard.kills,
+            deaths: unrankedBoard.deaths,
+          })
+        : extractModeFromSegments(payload, 'pvp_standard'),
+  };
+}
+
+/**
+ * arenyze 上游客户端。fetchImpl 供测试注入；生产使用运行时全局 fetch
+ * （云函数 Node 18+ 运行时）。apiKey 只经 config 传入，禁止落日志。
+ */
+function createArenyzeClient(config, fetchImpl) {
+  const apiKey = typeof config.apiKey === 'string' ? config.apiKey.trim() : '';
+  if (apiKey === '') {
+    throw createCoreError('E_UPSTREAM_NOT_CONFIGURED', 'arenyze apiKey 未配置');
+  }
+  const baseUrl =
+    typeof config.baseUrl === 'string' && config.baseUrl.trim() !== ''
+      ? config.baseUrl.trim().replace(/\/+$/, '')
+      : ARENYZE_DEFAULT_BASE_URL;
+  const doFetch = typeof fetchImpl === 'function' ? fetchImpl : globalThis.fetch;
+  if (typeof doFetch !== 'function') {
+    throw createCoreError('E_UPSTREAM_NOT_CONFIGURED', '当前运行时不支持 fetch，无法访问上游');
+  }
+
+  async function requestJson(pathname, query) {
+    const url = new URL(`${baseUrl}${pathname}`);
+    for (const [key, value] of Object.entries(query)) {
+      url.searchParams.set(key, value);
+    }
+    const timeoutSignal =
+      typeof AbortSignal === 'object' && typeof AbortSignal.timeout === 'function'
+        ? AbortSignal.timeout(ARENYZE_REQUEST_TIMEOUT_MS)
+        : undefined;
+    let response;
+    try {
+      response = await doFetch(url, { headers: { 'api-key': apiKey }, signal: timeoutSignal });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'unknown';
+      throw createCoreError('E_UPSTREAM_ERROR', `上游网络请求失败：${reason}`);
+    }
+    if (response.status === 429) {
+      throw createCoreError('E_RATE_LIMITED', '上游调用频率超限，请稍后再试');
+    }
+    if (response.status === 404) {
+      throw createCoreError('E_NOT_FOUND', '玩家不存在或平台不匹配');
+    }
+    if (response.status === 401 || response.status === 403) {
+      throw createCoreError('E_UPSTREAM_ERROR', '上游认证失败，请检查 apiKey 配置');
+    }
+    if (!response.ok) {
+      throw createCoreError('E_UPSTREAM_ERROR', `上游响应异常：HTTP ${response.status}`);
+    }
+    try {
+      return await response.json();
+    } catch {
+      throw createCoreError('E_UPSTREAM_ERROR', '上游响应不是合法 JSON');
+    }
+  }
+
+  return {
+    async fetchPlayerStats(query) {
+      const payload = await requestJson('/v2/profile', {
+        nameOnPlatform: query.nickname,
+        platformType: ARENYZE_PLATFORM_BY_APP[query.platform] ?? query.platform,
+      });
+      return buildRawStatsFromProfile(payload, query);
+    },
+  };
+}
+
+/**
+ * 上游客户端工厂：按 uni-config-center 的 r6-upstream 配置分发。
+ * 配置缺失或 provider 未知时维持“上游未接入”降级语义。
+ * config.fetchImpl 仅作测试注入点，真实配置来自 JSON，不会带函数。
+ */
+function createUpstreamClient(config) {
+  const source = isPlainObject(config) ? config : {};
+  if (source.provider === 'arenyze') {
+    return createArenyzeClient(source, source.fetchImpl);
+  }
   return {
     async fetchPlayerStats(_query) {
-      // TODO(upstream): 接入育碧数据源。会话凭据只允许存放在
-      // uni-config-center（r6-upstream 插件），禁止落库、入前端或写日志。
+      // TODO(upstream): 接入其他数据源时在此扩展 provider 分发。会话凭据
+      // 只允许存放在 uni-config-center（r6-upstream 插件），禁止落库、入前端或写日志。
       throw createCoreError('E_UPSTREAM_NOT_CONFIGURED', '上游数据源尚未接入');
     },
   };
@@ -198,9 +611,13 @@ module.exports = {
   PLATFORMS,
   DEFAULT_PLATFORM,
   NICKNAME_MAX_LENGTH,
+  RP_HISTORY_MAX_POINTS,
   createCoreError,
+  normalizeRatio,
+  normalizeRpHistory,
   normalizeUpstreamStats,
   validatePlayerStatsQuery,
   normalizeCacheKey,
+  createArenyzeClient,
   createUpstreamClient,
 };

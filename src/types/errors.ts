@@ -62,21 +62,24 @@ export function toAppError(error: unknown): AppError {
 }
 
 /**
- * 云对象响应信封校验：云端以 200 响应体返回 { errCode, errMsg } 表示业务错误，
- * errCode 缺失或为 'OK' 视为成功。支付宝云传输层不保留 throw 的 errCode
- * （任何 throw 都变成调用失败并丢失错误码），因此业务错误不走 throw 传输。
+ * 云对象响应解包。约定（实测 2026-10，依据 SDK 传输层源码）：
+ * 支付宝云 transport 把函数返回值原样作为 result 交给 importObject，
+ * result.errCode 为真值即被 SDK 视为业务错误抛出（错误码与消息完整保留），
+ * 否则 result 原样返回给调用方。因此成功载荷不带 errCode（{ ok: true, ... }），
+ * 业务错误载荷为 { errCode, errMsg }——SDK 抛出后经 toAppError 收敛，
+ * 这里只做防御性兜底。
  */
-export function assertCloudSuccess(result: unknown): void {
+export function unwrapCloudResult(result: unknown): Record<string, unknown> {
   if (typeof result !== 'object' || result === null) {
-    return;
+    throw new AppError('E_UNKNOWN', '云对象响应结构异常');
   }
-  const errCode = readStringProperty(result, 'errCode');
-  if (errCode === null || errCode === 'OK') {
-    return;
+  const payload = result as { errCode?: unknown; errMsg?: unknown };
+  const errCode = typeof payload.errCode === 'string' ? payload.errCode : '';
+  if (errCode !== '') {
+    const code = (KNOWN_CODES.has(errCode) ? errCode : 'E_UNKNOWN') as AppErrorCode;
+    const detail =
+      typeof payload.errMsg === 'string' && payload.errMsg !== '' ? payload.errMsg : code;
+    throw new AppError(code, detail);
   }
-  const errMsg = readStringProperty(result, 'errMsg');
-  throw new AppError(
-    (KNOWN_CODES.has(errCode) ? errCode : 'E_UNKNOWN') as AppErrorCode,
-    errMsg ?? errCode,
-  );
+  return result as Record<string, unknown>;
 }

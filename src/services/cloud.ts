@@ -1,7 +1,7 @@
 import uniCloudSdk, { type UniCloudInstance } from '@dcloudio/uni-cloud';
 
 import { UNICLOUD_SPACE, getUnicloudEndpoint, isUnicloudConfigured } from '@/config/env';
-import { AppError, assertCloudSuccess, toAppError } from '@/types/errors';
+import { AppError, toAppError, unwrapCloudResult } from '@/types/errors';
 
 let cloudClient: UniCloudInstance | null = null;
 
@@ -29,7 +29,7 @@ function getCloudClient(): UniCloudInstance {
 
 /**
  * 云对象调用统一出口：所有对云对象的访问都经过这里，
- * 统一完成响应信封校验与错误收敛，页面层不再感知 importObject 细节。
+ * 统一完成响应解包与错误收敛，页面层不再感知 importObject 细节。
  */
 export async function callCloudObject<T>(
   objectName: string,
@@ -37,14 +37,13 @@ export async function callCloudObject<T>(
   params?: unknown,
 ): Promise<T> {
   try {
-    const target = getCloudClient().importObject(objectName);
+    const target = getCloudClient().importObject(objectName, { customUI: true });
     const methodFn = target[method];
     if (typeof methodFn !== 'function') {
       throw new AppError('E_UNKNOWN', `云对象 ${objectName} 不存在方法 ${method}`);
     }
     const result: unknown = await methodFn(params);
-    assertCloudSuccess(result);
-    return result as T;
+    return unwrapCloudResult(result) as T;
   } catch (error) {
     throw toAppError(error);
   }

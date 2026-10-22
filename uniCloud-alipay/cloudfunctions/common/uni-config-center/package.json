@@ -1,0 +1,6 @@
+{
+  "name": "uni-config-center",
+  "version": "1.0.0",
+  "description": "云函数配置中心（接口对齐 DCloud uni-config-center 的最小实现）",
+  "main": "index.js"
+}

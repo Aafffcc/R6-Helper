@@ -25,6 +25,8 @@
     "@dcloudio/uni-components": "3.0.0-alpha-5030220261016001",
     "@dcloudio/uni-h5": "3.0.0-alpha-5030220261016001",
     "@dcloudio/uni-mp-weixin": "3.0.0-alpha-5030220261016001",
+    "@qiun/ucharts": "^2.5.0-20230101",
+    "@wot-ui/ui": "^2.3.2",
     "vue": "3.4.21"
   },
   "devDependencies": {
@@ -39,6 +41,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vue": "^9.33.0",
     "globals": "^16.0.0",
+    "miniprogram-api-typings": "^5.2.3",
     "prettier": "^3.6.2",
     "sass": "^1.80.0",
     "typescript": "~5.6.3",

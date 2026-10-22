@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeCacheKey, normalizeUpstreamStats, validatePlayerStatsQuery } from '../index';
+import {
+  normalizeCacheKey,
+  normalizeRatio,
+  normalizeRpHistory,
+  normalizeUpstreamStats,
+  validatePlayerStatsQuery,
+} from '../index';
 
 describe('validatePlayerStatsQuery', () => {
   it('接受合法入参并裁剪昵称空白', () => {
@@ -48,8 +54,14 @@ describe('normalizeUpstreamStats（战绩归一化回归口径）', () => {
           losses: 80,
           kills: 1500,
           deaths: 1200,
+          hsPercent: 57.89,
+          rpHistory: [
+            [1758000000, { value: 4200, metadata: { rank: 'Diamond' } }],
+            [1758100000, { value: 4321, metadata: { rank: 'Champion' } }],
+          ],
         },
         casual: { wins: 50, losses: 50, kills: 600, deaths: 500 },
+        unranked: { wins: 8, losses: 4, kills: 70, deaths: 60 },
       },
       { nickname: 'fallback', platform: 'pc' },
     );
@@ -74,6 +86,11 @@ describe('normalizeUpstreamStats（战绩归一化回归口径）', () => {
         deaths: 1200,
         kd: 1.25,
       },
+      hsPercent: 0.5789,
+      rpHistory: [
+        { timestamp: 1758000000000, rp: 4200, rank: 'Diamond' },
+        { timestamp: 1758100000000, rp: 4321, rank: 'Champion' },
+      ],
     });
     expect(stats.casual).toEqual({
       wins: 50,
@@ -82,6 +99,14 @@ describe('normalizeUpstreamStats（战绩归一化回归口径）', () => {
       kills: 600,
       deaths: 500,
       kd: 1.2,
+    });
+    expect(stats.unranked).toEqual({
+      wins: 8,
+      losses: 4,
+      winRate: 2 / 3,
+      kills: 70,
+      deaths: 60,
+      kd: 7 / 6,
     });
   });
 
@@ -96,6 +121,7 @@ describe('normalizeUpstreamStats（战绩归一化回归口径）', () => {
     });
     expect(stats.ranked).toBeNull();
     expect(stats.casual).toBeNull();
+    expect(stats.unranked).toBeNull();
   });
 
   it('未知数据一律置 null，禁止填零（核心回归）', () => {
@@ -123,6 +149,8 @@ describe('normalizeUpstreamStats（战绩归一化回归口径）', () => {
         deaths: null,
         kd: null,
       },
+      hsPercent: null,
+      rpHistory: [],
     });
   });
 
@@ -169,6 +197,54 @@ describe('normalizeUpstreamStats（战绩归一化回归口径）', () => {
     );
     expect(stats.ranked).toBeNull();
     expect(stats.casual).toMatchObject({ winRate: 0.5 });
+  });
+});
+
+describe('normalizeRatio（比例口径）', () => {
+  it('百分数除以 100，小数比例原样保留', () => {
+    expect(normalizeRatio(57.89)).toBe(0.5789);
+    expect(normalizeRatio(0.75)).toBe(0.75);
+    expect(normalizeRatio(100)).toBe(1);
+    expect(normalizeRatio('0.75')).toBe(0.75);
+  });
+
+  it('负数、超过 100 的输入、垃圾输入归 null，真实 0 保留', () => {
+    expect(normalizeRatio(-1)).toBeNull();
+    expect(normalizeRatio(150)).toBeNull();
+    expect(normalizeRatio('n/a')).toBeNull();
+    expect(normalizeRatio(null)).toBeNull();
+    expect(normalizeRatio(0)).toBe(0);
+  });
+});
+
+describe('normalizeRpHistory（RP 历史序列）', () => {
+  it('元组数组逐点映射，ISO 字符串与秒级时间戳统一换算为毫秒', () => {
+    const points = normalizeRpHistory([
+      [1758000000, { value: 3000, metadata: { rank: 'GOLD I' } }],
+      [1758100000000, { value: 3200, metadata: { rank: 'GOLD II' } }],
+      ['2026-10-15T15:58:28.134+00:00', { value: 3300, metadata: { rank: 'PLATINUM II' } }],
+    ]);
+    expect(points).toEqual([
+      { timestamp: 1758000000000, rp: 3000, rank: 'GOLD I' },
+      { timestamp: 1758100000000, rp: 3200, rank: 'GOLD II' },
+      { timestamp: Date.parse('2026-10-15T15:58:28.134+00:00'), rp: 3300, rank: 'PLATINUM II' },
+    ]);
+  });
+
+  it('非法点跳过，缺失字段降级 null，非数组返回空列表', () => {
+    const points = normalizeRpHistory([
+      ['bad', { value: 1 }],
+      [1758000000, 'not-object'],
+      [1758000000, { metadata: { rank: 'X' } }],
+      [1, { value: 2 }],
+    ]);
+    expect(points).toEqual([
+      { timestamp: null, rp: 1, rank: null },
+      { timestamp: 1758000000000, rp: null, rank: 'X' },
+      { timestamp: null, rp: 2, rank: null },
+    ]);
+    expect(normalizeRpHistory(null)).toEqual([]);
+    expect(normalizeRpHistory('nope')).toEqual([]);
   });
 });
 

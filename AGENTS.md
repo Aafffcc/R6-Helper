@@ -7,7 +7,8 @@
 - uni-app 使用 Vue 3 + Vite + TypeScript，页面统一 `<script setup>` 组合式 API。
 - 禁止 Vue 2 写法：filters、事件总线、`Vue.prototype` 扩展、`new Vue()` 入口等。uni-app 页面生命周期（`onLoad`、`onShow`、`onPullDownRefresh` 等）是平台 API，不受此限。
 - 框架与编译器版本以 package.json 锁定为准。升级 uni-app、Vue、编译器属于显式变更，单独提交并全量回归。
-- UI 组件库选型后在本文件登记；组件从单一来源引入，禁止多套组件库混用。
+- UI 组件库选型登记为 Wot UI（即 wot-design-uni 2.x，npm 包 `@wot-ui/ui`，`wd-` 前缀，easycom 自动引入）；组件从单一来源引入，禁止多套组件库混用，更换组件库属于显式变更，单独提交并全量回归。
+- 图表库统一使用 uCharts（npm 包 `@qiun/ucharts`，最小类型声明在 `src/types/ucharts.d.ts`），与组件库适用同一单一来源约束；图表皮肤必须跟随 `$r6` 深色色板。
 - uniCloud 业务逻辑优先写云对象，不新增散装的云函数入口；云函数运行时跟随空间模板，不擅自引入浏览器专用 API。
 - 目标平台以微信小程序为第一优先。平台差异用条件编译（`#ifdef MP-WEIXIN`）隔离在边缘处，核心业务代码保持平台无关。
 
@@ -33,7 +34,7 @@
 
 - `src/pages` 只负责页面状态与交互；对云对象的调用统一封装在 `src/services`；纯转换逻辑放在 `src/utils`，必须可脱离 uni-app 运行时单独测试。
 - `uniCloud-alipay/cloudfunctions` 中每个云对象一个职责（目录名带云厂商后缀是 HBuilderX 识别要求）。战绩归一化、来源适配是纯逻辑，放在可独立测试的公共模块中，云对象只做参数校验和调用编排。
-- 上游（育碧）会话凭据只存放在 `uni-config-center` 或云函数环境配置中，禁止出现在仓库、前端代码、数据库文档和日志里。小程序端不得保存任何来源密钥。
+- 上游数据源凭据（当前为 arenyze API key）只存放在 `uni-config-center`（r6-upstream 插件，真实 config.json 已 gitignore）或云函数环境配置中，禁止出现在仓库、前端代码、数据库文档和日志里。小程序端不得保存任何来源密钥。
 - 外部输入首先用 `unknown` 接收并验证，禁止用 `any` 绕过检查。云对象入参用 schema 或手写校验先行收敛。
 - 不更改接口字段、缓存键、来源口径或错误码来满足格式规则。RP 和 MMR 分开；未知数据不填零；当前赛季不回退历史。
 - 数据库读写走 DB Schema：权限默认拒绝、按需放行，字段校验写在 schema；禁止绕过 schema 在云函数里私改口径。

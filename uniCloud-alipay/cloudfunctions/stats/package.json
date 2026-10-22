@@ -4,6 +4,7 @@
   "description": "战绩查询云对象",
   "main": "index.obj.js",
   "dependencies": {
-    "stats-core": "file:../common/stats-core"
+    "stats-core": "file:../common/stats-core",
+    "uni-config-center": "file:../common/uni-config-center"
   }
 }

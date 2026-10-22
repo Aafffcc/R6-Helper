@@ -7,3 +7,5 @@ package-lock.json
 project.config.json
 project.private.config.json
 .env*
+# ZCode 会话工作区（工具生成，不属于项目源码）
+.zcode/

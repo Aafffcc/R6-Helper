@@ -12,6 +12,8 @@ project.private.config.json
 .env
 .env.local
 .env.*.local
+# uni-config-center 各插件真实配置（含上游密钥，禁止提交；仓库只保留 config.example.json）
+uniCloud-alipay/cloudfunctions/common/uni-config-center/*/config.json
 .hbuilderx/
 .idea/
 .vscode/
@@ -21,3 +23,4 @@ project.private.config.json
 npm-debug.log*
 .DS_Store
 Thumbs.db
+.zcode/

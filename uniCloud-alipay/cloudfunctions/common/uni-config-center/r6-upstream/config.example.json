@@ -1,0 +1,5 @@
+{
+  "provider": "arenyze",
+  "apiKey": "在此填入 arenyze API Key（真实 key 只写在本目录 config.json，该文件已 gitignore）",
+  "baseUrl": "https://public-api.arenyze.com/r6/api"
+}

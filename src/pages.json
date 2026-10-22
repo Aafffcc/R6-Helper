@@ -1,7 +1,13 @@
 {
+  "easycom": {
+    "autoscan": true,
+    "custom": {
+      "^wd-(.*)": "@wot-ui/ui/components/wd-$1/wd-$1.vue"
+    }
+  },
   "pages": [
     {
-      "path": "pages/index/index",
+      "path": "pages/stats/stats",
       "style": {
         "navigationBarTitleText": "R6-Helper"
       }
@@ -13,9 +19,27 @@
       }
     },
     {
-      "path": "pages/operators/operators",
+      "path": "pages/library/library",
       "style": {
-        "navigationBarTitleText": "操作员图鉴"
+        "navigationBarTitleText": "资料库"
+      }
+    },
+    {
+      "path": "pages/esports/esports",
+      "style": {
+        "navigationBarTitleText": "电竞"
+      }
+    },
+    {
+      "path": "pages/agent/agent",
+      "style": {
+        "navigationBarTitleText": "Agent"
+      }
+    },
+    {
+      "path": "pages/profile/profile",
+      "style": {
+        "navigationBarTitleText": "个人中心"
       }
     }
   ],
@@ -26,12 +50,24 @@
     "borderStyle": "black",
     "list": [
       {
-        "pagePath": "pages/index/index",
+        "pagePath": "pages/stats/stats",
         "text": "战绩"
       },
       {
-        "pagePath": "pages/operators/operators",
-        "text": "操作员"
+        "pagePath": "pages/esports/esports",
+        "text": "电竞"
+      },
+      {
+        "pagePath": "pages/library/library",
+        "text": "资料库"
+      },
+      {
+        "pagePath": "pages/agent/agent",
+        "text": "Agent"
+      },
+      {
+        "pagePath": "pages/profile/profile",
+        "text": "个人中心"
       }
     ]
   },

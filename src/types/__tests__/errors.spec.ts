@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { AppError, assertCloudSuccess, toAppError } from '../errors';
+import { AppError, toAppError, unwrapCloudResult } from '../errors';
 
 describe('toAppError', () => {
   it('AppError 原样返回，不重复包装', () => {
@@ -32,31 +32,37 @@ describe('toAppError', () => {
   });
 });
 
-describe('assertCloudSuccess（云对象响应信封）', () => {
-  it('成功信封与无 errCode 的响应直接通过', () => {
-    expect(() => assertCloudSuccess({ errCode: 'OK', stats: {}, fromCache: true })).not.toThrow();
-    expect(() => assertCloudSuccess({ stats: {} })).not.toThrow();
-    expect(() => assertCloudSuccess(null)).not.toThrow();
+describe('unwrapCloudResult（云对象响应解包）', () => {
+  it('成功载荷（不带 errCode）原样返回', () => {
+    const data = { ok: true, stats: { wins: 1 }, fromCache: true };
+    expect(unwrapCloudResult(data)).toBe(data);
   });
 
-  it('业务错误信封转为 AppError 并保留错误码', () => {
-    expect(() =>
-      assertCloudSuccess({ errCode: 'E_UPSTREAM_NOT_CONFIGURED', errMsg: '上游数据源尚未接入' }),
-    ).toThrowError(AppError);
+  it('业务错误载荷转为 AppError，错误码与 errMsg 完整保留', () => {
     try {
-      assertCloudSuccess({ errCode: 'E_UPSTREAM_NOT_CONFIGURED', errMsg: '上游数据源尚未接入' });
+      unwrapCloudResult({
+        errCode: 'E_UPSTREAM_NOT_CONFIGURED',
+        errMsg: 'arenyze apiKey 未配置',
+      });
+      expect.unreachable('should throw');
     } catch (error) {
       expect((error as AppError).code).toBe('E_UPSTREAM_NOT_CONFIGURED');
-      expect((error as AppError).detail).toBe('上游数据源尚未接入');
+      expect((error as AppError).detail).toBe('arenyze apiKey 未配置');
     }
   });
 
-  it('未知错误码收敛为 E_UNKNOWN', () => {
+  it('未知错误码收敛为 E_UNKNOWN，但保留原始 errMsg', () => {
     try {
-      assertCloudSuccess({ errCode: 'E_SOMETHING_NEW', errMsg: '未知错误' });
+      unwrapCloudResult({ errCode: 'E_SOMETHING_NEW', errMsg: '未知错误' });
       expect.unreachable('should throw');
     } catch (error) {
       expect((error as AppError).code).toBe('E_UNKNOWN');
+      expect((error as AppError).detail).toBe('未知错误');
     }
+  });
+
+  it('非对象响应收敛为 E_UNKNOWN', () => {
+    expect(() => unwrapCloudResult(null)).toThrowError(AppError);
+    expect(() => unwrapCloudResult('str')).toThrowError(AppError);
   });
 });

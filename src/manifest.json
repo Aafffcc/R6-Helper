@@ -7,7 +7,7 @@
   "vueVersion": "3",
   "locale": "zh-Hans",
   "mp-weixin": {
-    "appid": "",
+    "appid": "wx840586c9b02dd724",
     "setting": {
       "urlCheck": false,
       "es6": true,
