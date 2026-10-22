@@ -57,14 +57,27 @@ function badRequest(message) {
   return { ok: false, errCode: 'E_BAD_REQUEST', errMsg: message };
 }
 
-/** URL 化的请求体可能已被网关解析为对象，也可能仍是原始字符串，两种形态都兼容 */
+/**
+ * URL 化的请求体有三种形态（官方 http.html 文档）：已被网关解析为对象、
+ * 原始 JSON 字符串、base64 编码字符串（isBase64Encoded 标记），三种都要兼容。
+ */
 function parseRequestBody(event) {
-  if (isPlainObject(event) && isPlainObject(event.body)) {
+  if (!isPlainObject(event)) {
+    return null;
+  }
+  if (isPlainObject(event.body)) {
     return event.body;
   }
-  const raw = isPlainObject(event) && typeof event.body === 'string' ? event.body : null;
-  if (raw === null) {
-    return isPlainObject(event) ? event : null;
+  if (typeof event.body !== 'string') {
+    return null;
+  }
+  let raw = event.body;
+  if (event.isBase64Encoded === true) {
+    try {
+      raw = Buffer.from(raw, 'base64').toString('utf8');
+    } catch {
+      return null;
+    }
   }
   try {
     const parsed = JSON.parse(raw);
