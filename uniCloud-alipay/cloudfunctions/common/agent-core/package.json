@@ -1,0 +1,6 @@
+{
+  "name": "agent-core",
+  "version": "0.1.0",
+  "description": "Agent 请求校验与模型协议适配",
+  "main": "index.js"
+}

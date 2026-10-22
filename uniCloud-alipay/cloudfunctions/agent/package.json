@@ -1,0 +1,10 @@
+{
+  "name": "agent",
+  "version": "0.1.0",
+  "description": "R6 垂直领域 Agent 云对象",
+  "main": "index.obj.js",
+  "dependencies": {
+    "agent-core": "file:../common/agent-core",
+    "uni-config-center": "file:../common/uni-config-center"
+  }
+}

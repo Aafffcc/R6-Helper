@@ -4,6 +4,14 @@
 
 维护规范见 [AGENTS.md](./AGENTS.md)。
 
+## Agent 模型配置
+
+Agent 页面通过 `uniCloud-alipay/cloudfunctions/agent` 调用 OpenAI Chat Completions 兼容接口，模型凭据只放在云端配置中心。
+
+部署前复制 `uniCloud-alipay/cloudfunctions/common/uni-config-center/r6-agent/config.example.json` 为同目录的 `config.json`，填写 `apiKey`、`baseUrl`、`model`，并可选填写 `systemPrompt`。示例采用 DeepSeek 的 `https://api.deepseek.com` 与 `deepseek-flash`；其他兼容供应商应填写其对应的根地址和模型名。
+
+随后上传 `common/uni-config-center`、`common/agent-core` 和 `agent` 云对象，并上传 `uniCloud-alipay/database/agent-usage.schema.json`。首版按短会话调用，不保存聊天记录，每个来源每日最多调用 20 次，单条消息最多 1200 字，最多携带 16 条上下文消息。当前以系统提示词限定 R6 领域回答，尚未接入检索知识库或版本实时数据。
+
 ## 目录结构
 
 ```
@@ -25,12 +33,14 @@
 │  └─ static/gen/                   # 生成产物，禁止手工编辑
 ├─ uniCloud-alipay/
 │  ├─ cloudfunctions/
+│  │  ├─ agent/                      # Agent 云对象：兼容 Chat Completions 请求 + 云端限流
 │  │  ├─ stats/                     # stats 云对象：参数校验 + 缓存读写 + 编排
 │  │  ├─ asset-import/              # 图鉴资产一次性导入（URL 化 + token，配合上传脚本）
 │  │  └─ common/
 │  │     ├─ stats-core/             # 归一化与上游适配纯逻辑（口径唯一来源，含回归测试）
+│  │     ├─ agent-core/              # Agent 消息校验与模型协议请求（含回归测试）
 │  │     └─ uni-config-center/      # 云函数配置中心（r6-upstream / asset-import 真实 config.json 已 gitignore）
-│  └─ database/                     # DB Schema（stats-cache，权限默认拒绝）
+│  └─ database/                     # DB Schema（stats-cache / agent-usage，权限默认拒绝）
 ```
 
 ## 快速开始
@@ -99,10 +109,10 @@ npm run verify            # format:check + lint + type-check + test
 - [x] 工程骨架、校验链路（format/lint/type-check/test）、微信端构建
 - [x] stats 云对象 + 缓存 Schema + 归一化公共模块（含战绩归一化回归用例）
 - [x] 云链路联调验证（开发者工具）：客户端 SDK 初始化 → 云对象 → 参数校验 → 缓存读取 → 错误信封
-- [x] 五板块信息架构：战绩 / 电竞 / 资料库 / Agent / 个人中心（后三者为占位页）
+- [x] 五板块信息架构：战绩 / 电竞 / 资料库 / Agent / 个人中心
 - [x] arenyze 上游适配 + RP 趋势图表（uCharts）+ 收藏玩家（本地存储）
 - [x] M3 资料库补全：地图 / 皮肤 / 挂件（arenyze 元数据一次性烘焙，含回归用例）+ 资料库五 tab
 - [x] 图片托管工具链：asset-import 云函数（URL 化 + token）+ 批量上传脚本，`VITE_ASSET_BASE_URL` 填入前缀即亮图
 - [ ] 图片资产实际上传执行与真机亮图验证（工具链就绪，按「uniCloud 接入步骤」第 6 步操作）
 - [ ] arenyze 真实 key 联调与真机回归（适配器按官方文档字段实现，首次真实响应如与文档有差异需校准 extract 系列函数并补用例）
-- [ ] 电竞模块（Liquipedia 数据源） / 个人中心（微信登录 + 收藏云同步） / Agent 可行性评估
+- [ ] 电竞模块（Liquipedia 数据源） / 个人中心（微信登录 + 收藏云同步）

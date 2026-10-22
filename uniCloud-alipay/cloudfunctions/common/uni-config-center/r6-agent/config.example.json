@@ -1,0 +1,6 @@
+{
+  "apiKey": "在此填入模型供应商 API Key（真实 key 只写在本目录 config.json，该文件已 gitignore）",
+  "baseUrl": "https://api.deepseek.com",
+  "model": "deepseek-flash",
+  "systemPrompt": "你是彩虹六号 Siege 垂直领域助手。用简洁、可执行的中文回答，优先说明前提、站位、干员职责和风险；不确定的版本数据要明确说不确定，不要编造实时数值。"
+}

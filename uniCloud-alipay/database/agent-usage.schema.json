@@ -1,0 +1,35 @@
+{
+  "bsonType": "object",
+  "required": ["clientKey", "bucket", "count", "updatedAt"],
+  "permission": {
+    "read": false,
+    "create": false,
+    "update": false,
+    "delete": false,
+    "count": false
+  },
+  "properties": {
+    "_id": {
+      "description": "由 API key 派生 HMAC 对云端来源 IP 做摘要，不保存原始 IP"
+    },
+    "clientKey": {
+      "bsonType": "string",
+      "description": "与 _id 一致的 HMAC-SHA256 摘要"
+    },
+    "bucket": {
+      "bsonType": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "UTC 日期桶；每日首次请求重置计数"
+    },
+    "count": {
+      "bsonType": "int",
+      "minimum": 1,
+      "maximum": 20,
+      "description": "该来源 IP 在当前 UTC 日期的 Agent 调用次数"
+    },
+    "updatedAt": {
+      "bsonType": "long",
+      "description": "最近一次计数更新时间（毫秒）"
+    }
+  }
+}
