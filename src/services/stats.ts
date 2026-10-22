@@ -1,9 +1,14 @@
 import { callCloudObject } from './cloud';
-import type { NormalizedPlayerStats, StatsPlatform } from '@/types/stats';
+import type { NormalizedOperatorStats, NormalizedPlayerStats, StatsPlatform } from '@/types/stats';
 import { AppError } from '@/types/errors';
 
 export interface PlayerStatsResult {
   stats: NormalizedPlayerStats;
+  fromCache: boolean;
+}
+
+export interface PlayerOperatorsResult {
+  operators: NormalizedOperatorStats[];
   fromCache: boolean;
 }
 
@@ -36,4 +41,22 @@ export async function fetchPlayerStats(
     throw new AppError('E_UNKNOWN', '云端返回的战绩结构异常');
   }
   return { stats: result.stats, fromCache: result.fromCache === true };
+}
+
+export async function fetchPlayerOperators(
+  nickname: string,
+  platform: StatsPlatform,
+): Promise<PlayerOperatorsResult> {
+  const result = await callCloudObject<{ operators?: unknown; fromCache?: unknown }>(
+    'stats',
+    'getPlayerOperators',
+    { nickname, platform },
+  );
+  if (!Array.isArray(result?.operators)) {
+    throw new AppError('E_UNKNOWN', '云端返回的干员统计结构异常');
+  }
+  return {
+    operators: result.operators as NormalizedOperatorStats[],
+    fromCache: result.fromCache === true,
+  };
 }

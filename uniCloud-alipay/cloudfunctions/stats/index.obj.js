@@ -8,14 +8,19 @@
  */
 
 const {
+  OPERATORS_CACHE_TTL_MS,
   STATS_CACHE_TTL_MS,
   createUpstreamClient,
   normalizeCacheKey,
+  normalizeOperatorStats,
   normalizeUpstreamStats,
   validatePlayerStatsQuery,
 } = require('stats-core');
 
 const cacheCollection = uniCloud.database().collection('stats-cache');
+
+// 归一化响应增加字段时递增，避免仍在 TTL 内的旧载荷缺少新字段。
+const CACHE_SCHEMA_VERSION = 2;
 
 // 上游凭据统一存放在 uni-config-center（r6-upstream 插件）。
 // 配置加载状态必须留痕到云端日志：模块缺失、配置缺失、key 为空三种情况
@@ -57,7 +62,12 @@ async function readFreshCache(cacheKey) {
   try {
     const result = await cacheCollection.doc(cacheKey).get();
     const doc = result.data && result.data.length > 0 ? result.data[0] : null;
-    if (!doc || typeof doc.expiresAt !== 'number' || doc.expiresAt <= Date.now()) {
+    if (
+      !doc ||
+      doc.cacheVersion !== CACHE_SCHEMA_VERSION ||
+      typeof doc.expiresAt !== 'number' ||
+      doc.expiresAt <= Date.now()
+    ) {
       return null;
     }
     return isPlainObject(doc.data) ? doc.data : null;
@@ -67,16 +77,17 @@ async function readFreshCache(cacheKey) {
   }
 }
 
-async function writeCache(cacheKey, query, stats) {
+async function writeCache(cacheKey, query, data, ttlMs = STATS_CACHE_TTL_MS) {
   const now = Date.now();
   try {
     await cacheCollection.doc(cacheKey).set({
       cacheKey,
       platform: query.platform,
       nickname: query.nickname,
-      data: stats,
+      cacheVersion: CACHE_SCHEMA_VERSION,
+      data,
       fetchedAt: now,
-      expiresAt: now + STATS_CACHE_TTL_MS,
+      expiresAt: now + ttlMs,
     });
   } catch (error) {
     // 写缓存失败不影响本次返回，仅影响下一次命中率
@@ -115,6 +126,16 @@ function toErrorData(error) {
   return { errCode: 'E_UNKNOWN', errMsg: '查询失败' };
 }
 
+function handleObjectError(method, error) {
+  const data = toErrorData(error);
+  if (data.errCode === 'E_UNKNOWN' || data.errCode === 'E_UPSTREAM_ERROR') {
+    // 非预期错误保留原始堆栈进云端日志，便于排查
+    console.error(`[stats] ${method} 执行异常`, error);
+  }
+  console.log(`[stats] ${method} 响应业务错误：${data.errCode}`);
+  return data;
+}
+
 module.exports = {
   async getPlayerStats(params) {
     try {
@@ -137,13 +158,33 @@ module.exports = {
       console.log('[stats] 上游请求成功，已写缓存');
       return { ok: true, stats, fromCache: false };
     } catch (error) {
-      const data = toErrorData(error);
-      if (data.errCode === 'E_UNKNOWN' || data.errCode === 'E_UPSTREAM_ERROR') {
-        // 非预期错误保留原始堆栈进云端日志，便于排查
-        console.error('[stats] getPlayerStats 执行异常', error);
+      return handleObjectError('getPlayerStats', error);
+    }
+  },
+
+  /**
+   * 干员聚合统计：独立缓存键（基础键 + _ops 后缀）与更长有效期，
+   * 与主查询分开请求上游，主战绩查询不因此多花上游配额。
+   */
+  async getPlayerOperators(params) {
+    try {
+      const query = validatePlayerStatsQuery(params);
+      const cacheKey = `${normalizeCacheKey(query.platform, query.nickname)}_ops`;
+
+      const cached = await readFreshCache(cacheKey);
+      if (Array.isArray(cached?.operators)) {
+        console.log('[stats] 干员缓存命中，直接返回');
+        return { ok: true, operators: cached.operators, fromCache: true };
       }
-      console.log(`[stats] 响应业务错误：${data.errCode}`);
-      return data;
+      console.log('[stats] 干员缓存未命中，请求上游 arenyze');
+      const client = createUpstreamClient(upstreamConfig);
+      const raw = await client.fetchPlayerOperators(query);
+      const operators = normalizeOperatorStats(raw);
+      await writeCache(cacheKey, query, { operators }, OPERATORS_CACHE_TTL_MS);
+      console.log('[stats] 干员上游请求成功，已写缓存');
+      return { ok: true, operators, fromCache: false };
+    } catch (error) {
+      return handleObjectError('getPlayerOperators', error);
     }
   },
 };

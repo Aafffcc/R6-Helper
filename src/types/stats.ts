@@ -7,8 +7,10 @@
 export type {
   NormalizedIdentity,
   NormalizedModeStats,
+  NormalizedOperatorStats,
   NormalizedPlayerStats,
   NormalizedRankedSummary,
+  NormalizedSeasonRecord,
   RpHistoryPoint,
 } from '../../uniCloud-alipay/cloudfunctions/common/stats-core';
 

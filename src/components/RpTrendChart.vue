@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { getCurrentInstance, onMounted, watch } from 'vue';
+import { getCurrentInstance, onMounted, onUnmounted, watch } from 'vue';
 
 import uCharts from '@qiun/ucharts';
 import type { RpHistoryPoint } from '@/types/stats';
@@ -24,71 +24,88 @@ function renderChart() {
   if (valid.length === 0) {
     return;
   }
-  uni
-    .createSelectorQuery()
-    .in(instance)
-    .select(`#${canvasId}`)
-    .fields({ node: true, size: true }, () => {})
-    .exec((result) => {
-      const info = result?.[0] as { node?: HTMLCanvasElement; width?: number; height?: number };
-      const canvas = info?.node;
-      const width = info?.width ?? 0;
-      const height = info?.height ?? 0;
-      if (!canvas || width <= 0 || height <= 0) {
-        return;
-      }
-      const pixelRatio = uni.getWindowInfo().pixelRatio || 2;
-      canvas.width = width * pixelRatio;
-      canvas.height = height * pixelRatio;
-      const context = canvas.getContext('2d');
-      if (!context) {
-        return;
-      }
-      context.scale(pixelRatio, pixelRatio);
-      new uCharts({
-        type: 'line',
-        context,
-        width,
-        height,
-        pixelRatio,
-        categories: valid.map((point) => formatAxisLabel(point.timestamp)),
-        series: [
-          {
-            name: 'RP',
-            data: valid.map((point) => point.rp),
-            color: '#ff8c1a',
-          },
-        ],
-        // 与卡片底色一致，避免画布白底突兀
-        background: '#1F232B',
-        color: ['#ff8c1a'],
-        padding: [16, 12, 4, 8],
-        animation: true,
-        legend: { show: false },
-        dataLabel: false,
-        xAxis: {
-          disableGrid: true,
-          labelCount: 4,
-          fontSize: 10,
-          fontColor: '#9aa1ac',
-          lineHeight: 1.2,
-          marginTop: 0,
+  const query = uni.createSelectorQuery().in(instance);
+  // 布局尺寸量外层普通 view：H5 端 canvas 由 uni 自管放大 backing store，
+  // 直接探测 canvas 元素拿到的宽高会失真，导致图表按错误尺寸布局被裁切
+  query.select('.rp-trend').fields({ size: true }, () => {});
+  query.select(`#${canvasId}`).fields({ node: true }, () => {});
+  query.exec((result) => {
+    const size = result?.[0] as { width?: number; height?: number };
+    const info = result?.[1] as { node?: HTMLCanvasElement };
+    const canvas = info?.node;
+    const width = size?.width ?? 0;
+    const height = size?.height ?? 0;
+    if (!canvas || width <= 0 || height <= 0) {
+      return;
+    }
+    // canvas 2d 已手动放大画布并 scale 上下文；uCharts 内部会按 pixelRatio
+    // 再放大全部坐标与字号（opts.pix），这里必须传 1，否则二次放大导致比例异常
+    const dpr = uni.getWindowInfo().pixelRatio || 2;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return;
+    }
+    context.scale(dpr, dpr);
+    new uCharts({
+      type: 'line',
+      context,
+      width,
+      height,
+      pixelRatio: 1,
+      categories: valid.map((point) => formatAxisLabel(point.timestamp)),
+      series: [
+        {
+          name: 'RP',
+          data: valid.map((point) => point.rp),
+          color: '#ff8c1a',
         },
-        yAxis: {
-          gridColor: '#2c313b',
-          splitNumber: 4,
-          fontSize: 10,
-          fontColor: '#9aa1ac',
-        },
-        extra: {
-          line: { type: 'curve', width: 2, activeType: 'hollow' },
-          tooltip: { showBox: true, bgColor: '#262b35', fontColor: '#f5f6f8', legendShow: false },
-        },
-      });
+      ],
+      // 与卡片底色一致，避免画布白底突兀
+      background: '#1F232B',
+      color: ['#ff8c1a'],
+      padding: [16, 12, 4, 8],
+      animation: true,
+      legend: { show: false },
+      dataLabel: false,
+      xAxis: {
+        disableGrid: true,
+        labelCount: 4,
+        fontSize: 10,
+        fontColor: '#9aa1ac',
+        lineHeight: 1.2,
+        marginTop: 0,
+      },
+      yAxis: {
+        gridColor: '#2c313b',
+        splitNumber: 4,
+        fontSize: 10,
+        fontColor: '#9aa1ac',
+      },
+      extra: {
+        line: { type: 'curve', width: 2, activeType: 'hollow' },
+        tooltip: { showBox: true, bgColor: '#262b35', fontColor: '#f5f6f8', legendShow: false },
+      },
     });
+  });
 }
 
-onMounted(renderChart);
+// 视口在挂载后才稳定（H5 首帧布局、转屏、模拟器缩放）时，图表会按旧尺寸
+// 绘制而被裁切；监听窗口尺寸变化按新尺寸重绘，MP 端仅在转屏时触发。
+function handleWindowResize() {
+  renderChart();
+}
+
+onMounted(() => {
+  renderChart();
+  uni.onWindowResize(handleWindowResize);
+});
+
+onUnmounted(() => {
+  uni.offWindowResize(handleWindowResize);
+});
+
 watch(
   () => props.points,
   () => renderChart(),

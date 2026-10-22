@@ -6,12 +6,16 @@
  * 口径约定（改动必须同步回归用例）：
  * - RP 与 MMR 是两个独立维度，字段分开存放，互不推断；
  * - 未知数据一律置 null，禁止填零；
- * - 上游适配层只产出“当前赛季”数据，本模块不做历史赛季回退；
+ * - “当前赛季”各模式（ranked/casual/unranked/event）只取当前赛季分段，不做历史回退；
+ *   往赛季数据走独立的 seasonHistory 出口，只汇总、不参与当前赛季兜底；
  * - 胜率 = wins / (wins + losses)，K/D = kills / deaths，仅在双端已知时计算；
  * - 比例字段（winRate / hsPercent）统一为 0..1 口径。
  */
 
 const STATS_CACHE_TTL_MS = 10 * 60 * 1000;
+
+// 干员聚合统计变化慢于实时战绩，独立使用更长的缓存有效期以节省上游配额
+const OPERATORS_CACHE_TTL_MS = 30 * 60 * 1000;
 
 const PLATFORMS = ['pc', 'psn', 'xbox'];
 
@@ -170,6 +174,8 @@ function normalizeModeStats(raw) {
     kills,
     deaths,
     kd: computeKd(kills, deaths),
+    // 上游未提供爆头率的模式保持 null，禁止用其他模式的口径补位
+    hsPercent: normalizeRatio(raw.hsPercent),
   };
 }
 
@@ -184,12 +190,30 @@ function normalizeIdentity(raw, fallback) {
   };
 }
 
+/**
+ * 赛季最高段位名：取 RP 历史中 RP 最高的带段位名时点。
+ * 历史缺失或点名缺失时为 null，不用当前段位顶替（未知不推断）。
+ */
+function extractMaxRankName(points) {
+  let best = null;
+  for (const point of points) {
+    if (point.rp === null || point.rank === null) {
+      continue;
+    }
+    if (best === null || point.rp > best.rp) {
+      best = point;
+    }
+  }
+  return best === null ? null : best.rank;
+}
+
 function normalizeRankedSummary(raw) {
   if (!isPlainObject(raw)) {
     return null;
   }
   const rpSource = isPlainObject(raw.rp) ? raw.rp : {};
   const mmrSource = isPlainObject(raw.mmr) ? raw.mmr : {};
+  const history = normalizeRpHistory(raw.rpHistory);
   return {
     season: {
       id: toTrimmedString(raw.seasonId),
@@ -197,6 +221,7 @@ function normalizeRankedSummary(raw) {
     },
     rank: {
       name: toTrimmedString(raw.rankName),
+      max: extractMaxRankName(history),
     },
     rp: {
       current: toFiniteNumber(rpSource.current),
@@ -211,10 +236,42 @@ function normalizeRankedSummary(raw) {
       losses: raw.losses,
       kills: raw.kills,
       deaths: raw.deaths,
+      hsPercent: raw.hsPercent,
     }),
     hsPercent: normalizeRatio(raw.hsPercent),
-    rpHistory: normalizeRpHistory(raw.rpHistory),
+    rpHistory: history,
   };
+}
+
+/**
+ * 往赛季排位历史归一：适配层产出扁平分段摘要，这里统一收敛为展示口径。
+ * 排序与适配层一致（赛季号降序），缺失赛季号的记录排最后。
+ */
+function normalizeSeasonHistory(raw) {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const records = [];
+  for (const entry of raw) {
+    if (!isPlainObject(entry)) {
+      continue;
+    }
+    records.push({
+      seasonNumber: toFiniteNumber(entry.seasonNumber),
+      seasonId: toTrimmedString(entry.seasonId),
+      seasonName: toTrimmedString(entry.seasonName),
+      finalRankName: toTrimmedString(entry.finalRankName),
+      finalRp: toFiniteNumber(entry.finalRp),
+      maxRp: toFiniteNumber(entry.maxRp),
+      matches: normalizeModeStats({
+        wins: entry.wins,
+        losses: entry.losses,
+        kills: entry.kills,
+        deaths: entry.deaths,
+      }),
+    });
+  }
+  return records.sort((a, b) => (b.seasonNumber ?? 0) - (a.seasonNumber ?? 0));
 }
 
 /**
@@ -228,6 +285,8 @@ function normalizeUpstreamStats(raw, fallbackIdentity) {
     ranked: normalizeRankedSummary(source.ranked),
     casual: normalizeModeStats(source.casual),
     unranked: normalizeModeStats(source.unranked),
+    event: normalizeModeStats(source.event),
+    seasonHistory: normalizeSeasonHistory(source.seasonHistory),
   };
 }
 
@@ -440,7 +499,7 @@ function extractRankedFromProfile(payload) {
       losses: readSegmentStat(segmentStats, ['losses', 'matchesLost']),
       kills: readSegmentStat(segmentStats, ['kills']),
       deaths: readSegmentStat(segmentStats, ['deaths']),
-      hsPercent: null,
+      hsPercent: readSegmentStat(segmentStats, ['headshotPercent', 'headshot_percent']),
       rpHistory: [],
     };
   }
@@ -472,6 +531,137 @@ function extractModeFromSegments(payload, gamemode) {
     losses: readSegmentStat(segmentStats, ['losses', 'matchesLost']),
     kills: readSegmentStat(segmentStats, ['kills']),
     deaths: readSegmentStat(segmentStats, ['deaths']),
+    hsPercent: readSegmentStat(segmentStats, ['headshotPercent', 'headshot_percent']),
+  });
+}
+
+/** season 编号 → YxxSx 标签（Y1S1 = 1，Y11S3 = 43；仅上游 shortName 缺失时的兜底） */
+function composeSeasonLabel(seasonNumber) {
+  if (seasonNumber === null || seasonNumber < 1) {
+    return null;
+  }
+  const year = Math.ceil(seasonNumber / 4);
+  const seasonInYear = seasonNumber - (year - 1) * 4;
+  return `Y${year}S${seasonInYear}`;
+}
+
+/**
+ * 往赛季排位历史摘要（扁平口径，展示结构由 normalizeSeasonHistory 收敛）：
+ * seasons.segments 含全部历史赛季；同一赛季可能存在多地区分段，
+ * 取场次数最多的分段作为代表，不做跨段加总；排除当前赛季，只收录出现过
+ * 排位分段的往赛季，按赛季号降序（最新在前）。
+ */
+function extractSeasonHistory(payload) {
+  const segments = payload?.seasons?.data?.segments;
+  if (!Array.isArray(segments)) {
+    return [];
+  }
+  const currentSeason = findCurrentSeasonNumber(payload);
+  const pickedBySeason = new Map();
+  for (const segment of segments) {
+    if (!isPlainObject(segment) || !isPlainObject(segment.stats)) {
+      continue;
+    }
+    if (segment.attributes?.gamemode !== 'pvp_ranked') {
+      continue;
+    }
+    const seasonNumber = toFiniteNumber(segment.attributes?.season);
+    if (seasonNumber === null || seasonNumber === currentSeason) {
+      continue;
+    }
+    const matchesPlayed = readSegmentStat(segment.stats, ['matchesPlayed', 'matches_played']) ?? 0;
+    const picked = pickedBySeason.get(seasonNumber);
+    if (picked === undefined || matchesPlayed > picked.matchesPlayed) {
+      pickedBySeason.set(seasonNumber, { segment, matchesPlayed });
+    }
+  }
+  const records = [];
+  for (const [seasonNumber, picked] of pickedBySeason) {
+    const segment = picked.segment;
+    const metadata = isPlainObject(segment.metadata) ? segment.metadata : {};
+    const label = toTrimmedString(metadata.shortName) ?? composeSeasonLabel(seasonNumber);
+    const name = toTrimmedString(metadata.seasonName) ?? toTrimmedString(metadata.name);
+    records.push({
+      seasonNumber,
+      seasonId: label,
+      // 名称与标签同值（如上游 name 也填 Y10S4）时不重复展示
+      seasonName: name !== null && name !== label ? name : null,
+      finalRankName: toTrimmedString(metadata.rank),
+      finalRp: readSegmentStat(segment.stats, ['rankPoints', 'rank_points']),
+      maxRp: readSegmentStat(segment.stats, ['maxRankPoints', 'max_rank_points']),
+      wins: readSegmentStat(segment.stats, ['wins', 'matchesWon']),
+      losses: readSegmentStat(segment.stats, ['losses', 'matchesLost']),
+      kills: readSegmentStat(segment.stats, ['kills']),
+      deaths: readSegmentStat(segment.stats, ['deaths']),
+    });
+  }
+  return records.sort((a, b) => b.seasonNumber - a.seasonNumber);
+}
+
+/* ------------------------------------------------------------------ *
+ * arenyze 干员统计适配（v2/operators）
+ *
+ * 文档示例只确认 operator/side/roundsPlayed/kd/kills/deaths 字段，
+ * 其余字段（wins/losses/winPercent/headshotPercent 等）按 v1 同模型
+ * 口径多层回退读取；缺名称的条目丢弃，其余字段缺失逐项降级 null。
+ * ------------------------------------------------------------------ */
+
+function extractOperatorEntries(payload) {
+  const source = payload?.operators;
+  if (Array.isArray(source)) {
+    return source;
+  }
+  if (isPlainObject(source) && Array.isArray(source.operators)) {
+    return source.operators;
+  }
+  return [];
+}
+
+function normalizeOperatorEntry(entry) {
+  const name = toTrimmedString(entry.operator) ?? toTrimmedString(entry.name);
+  if (name === null) {
+    return null;
+  }
+  const wins = toFiniteNumber(entry.wins);
+  const losses = toFiniteNumber(entry.losses);
+  const kills = toFiniteNumber(entry.kills);
+  const deaths = toFiniteNumber(entry.deaths);
+  return {
+    name,
+    side: toTrimmedString(entry.side),
+    rounds: toFiniteNumber(entry.roundsPlayed) ?? toFiniteNumber(entry.rounds),
+    wins,
+    losses,
+    winRate: normalizeRatio(entry.winPercent) ?? computeWinRate(wins, losses),
+    kills,
+    deaths,
+    kd: toFiniteNumber(entry.kd) ?? computeKd(kills, deaths),
+    hsPercent: normalizeRatio(entry.headshotPercent),
+  };
+}
+
+/**
+ * 干员列表归一：按出场回合数降序（未知排最后），同回合数按名称排序保证稳定。
+ */
+function normalizeOperatorStats(raw) {
+  const source = Array.isArray(raw) ? raw : extractOperatorEntries(raw);
+  const operators = [];
+  for (const entry of source) {
+    if (!isPlainObject(entry)) {
+      continue;
+    }
+    const normalized = normalizeOperatorEntry(entry);
+    if (normalized !== null) {
+      operators.push(normalized);
+    }
+  }
+  return operators.sort((a, b) => {
+    const roundsA = a.rounds ?? -1;
+    const roundsB = b.rounds ?? -1;
+    if (roundsA !== roundsB) {
+      return roundsB - roundsA;
+    }
+    return a.name.localeCompare(b.name);
   });
 }
 
@@ -509,6 +699,7 @@ function buildRawStatsFromProfile(payload, query) {
             losses: casualBoard.losses,
             kills: casualBoard.kills,
             deaths: casualBoard.deaths,
+            hsPercent: casualBoard.headshotPercent,
           })
         : extractModeFromSegments(payload, 'pvp_casual'),
     unranked:
@@ -518,8 +709,12 @@ function buildRawStatsFromProfile(payload, query) {
             losses: unrankedBoard.losses,
             kills: unrankedBoard.kills,
             deaths: unrankedBoard.deaths,
+            hsPercent: unrankedBoard.headshotPercent,
           })
         : extractModeFromSegments(payload, 'pvp_standard'),
+    // event 模式无榜单口径，只能从当前赛季 pvp_event 分段取，缺失为 null
+    event: extractModeFromSegments(payload, 'pvp_event'),
+    seasonHistory: extractSeasonHistory(payload),
   };
 }
 
@@ -584,6 +779,15 @@ function createArenyzeClient(config, fetchImpl) {
       });
       return buildRawStatsFromProfile(payload, query);
     },
+    async fetchPlayerOperators(query) {
+      const payload = await requestJson('/v2/operators', {
+        nameOnPlatform: query.nickname,
+        platformType: ARENYZE_PLATFORM_BY_APP[query.platform] ?? query.platform,
+        // 一次拉全模式聚合，控制上游调用量；seasonYear 缺省由上游按当前赛季返回
+        modes: 'all',
+      });
+      return { operators: extractOperatorEntries(payload) };
+    },
   };
 }
 
@@ -603,11 +807,15 @@ function createUpstreamClient(config) {
       // 只允许存放在 uni-config-center（r6-upstream 插件），禁止落库、入前端或写日志。
       throw createCoreError('E_UPSTREAM_NOT_CONFIGURED', '上游数据源尚未接入');
     },
+    async fetchPlayerOperators(_query) {
+      throw createCoreError('E_UPSTREAM_NOT_CONFIGURED', '上游数据源尚未接入');
+    },
   };
 }
 
 module.exports = {
   STATS_CACHE_TTL_MS,
+  OPERATORS_CACHE_TTL_MS,
   PLATFORMS,
   DEFAULT_PLATFORM,
   NICKNAME_MAX_LENGTH,
@@ -616,6 +824,7 @@ module.exports = {
   normalizeRatio,
   normalizeRpHistory,
   normalizeUpstreamStats,
+  normalizeOperatorStats,
   validatePlayerStatsQuery,
   normalizeCacheKey,
   createArenyzeClient,

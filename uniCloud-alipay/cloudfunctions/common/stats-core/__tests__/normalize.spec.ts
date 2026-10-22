@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   normalizeCacheKey,
+  normalizeOperatorStats,
   normalizeRatio,
   normalizeRpHistory,
   normalizeUpstreamStats,
@@ -75,7 +76,8 @@ describe('normalizeUpstreamStats（战绩归一化回归口径）', () => {
     });
     expect(stats.ranked).toEqual({
       season: { id: 'Y10S3', name: 'High Stakes' },
-      rank: { name: 'Champion' },
+      // rank.max 取 RP 历史中 RP 最高的带名时点（4321 Champion > 4200 Diamond）
+      rank: { name: 'Champion', max: 'Champion' },
       rp: { current: 4321, max: 4400 },
       mmr: { current: 4321, peak: 4600 },
       matches: {
@@ -85,6 +87,7 @@ describe('normalizeUpstreamStats（战绩归一化回归口径）', () => {
         kills: 1500,
         deaths: 1200,
         kd: 1.25,
+        hsPercent: 0.5789,
       },
       hsPercent: 0.5789,
       rpHistory: [
@@ -99,6 +102,7 @@ describe('normalizeUpstreamStats（战绩归一化回归口径）', () => {
       kills: 600,
       deaths: 500,
       kd: 1.2,
+      hsPercent: null,
     });
     expect(stats.unranked).toEqual({
       wins: 8,
@@ -107,7 +111,10 @@ describe('normalizeUpstreamStats（战绩归一化回归口径）', () => {
       kills: 70,
       deaths: 60,
       kd: 7 / 6,
+      hsPercent: null,
     });
+    expect(stats.event).toBeNull();
+    expect(stats.seasonHistory).toEqual([]);
   });
 
   it('identity 缺失时使用回退昵称与平台，未知字段不推断', () => {
@@ -122,6 +129,8 @@ describe('normalizeUpstreamStats（战绩归一化回归口径）', () => {
     expect(stats.ranked).toBeNull();
     expect(stats.casual).toBeNull();
     expect(stats.unranked).toBeNull();
+    expect(stats.event).toBeNull();
+    expect(stats.seasonHistory).toEqual([]);
   });
 
   it('未知数据一律置 null，禁止填零（核心回归）', () => {
@@ -138,7 +147,7 @@ describe('normalizeUpstreamStats（战绩归一化回归口径）', () => {
     );
     expect(stats.ranked).toEqual({
       season: { id: 'Y10S3', name: null },
-      rank: { name: null },
+      rank: { name: null, max: null },
       rp: { current: 3000, max: null },
       mmr: { current: null, peak: null },
       matches: {
@@ -148,6 +157,7 @@ describe('normalizeUpstreamStats（战绩归一化回归口径）', () => {
         kills: 100,
         deaths: null,
         kd: null,
+        hsPercent: null,
       },
       hsPercent: null,
       rpHistory: [],
@@ -166,6 +176,7 @@ describe('normalizeUpstreamStats（战绩归一化回归口径）', () => {
       kills: 0,
       deaths: 3,
       kd: 0,
+      hsPercent: null,
     });
   });
 
@@ -197,6 +208,139 @@ describe('normalizeUpstreamStats（战绩归一化回归口径）', () => {
     );
     expect(stats.ranked).toBeNull();
     expect(stats.casual).toMatchObject({ winRate: 0.5 });
+  });
+
+  it('seasonHistory 归一：收敛为展示口径并按赛季号降序，缺失字段降级 null', () => {
+    const stats = normalizeUpstreamStats(
+      {
+        seasonHistory: [
+          {
+            seasonNumber: 42,
+            seasonId: 'Y11S2',
+            seasonName: 'System Override',
+            finalRankName: 'Platinum IV',
+            finalRp: 3134,
+            maxRp: 3200,
+            wins: 64,
+            losses: 58,
+            kills: 684,
+            deaths: 620,
+          },
+          {
+            seasonNumber: 43,
+            seasonId: 'Y11S3',
+            finalRp: 2971,
+            wins: 29,
+            losses: 30,
+            kills: 311,
+            deaths: 230,
+          },
+        ],
+      },
+      { nickname: 'n', platform: 'pc' },
+    );
+    expect(stats.seasonHistory).toEqual([
+      {
+        seasonNumber: 43,
+        seasonId: 'Y11S3',
+        seasonName: null,
+        finalRankName: null,
+        finalRp: 2971,
+        maxRp: null,
+        matches: {
+          wins: 29,
+          losses: 30,
+          winRate: 29 / 59,
+          kills: 311,
+          deaths: 230,
+          kd: 311 / 230,
+          hsPercent: null,
+        },
+      },
+      {
+        seasonNumber: 42,
+        seasonId: 'Y11S2',
+        seasonName: 'System Override',
+        finalRankName: 'Platinum IV',
+        finalRp: 3134,
+        maxRp: 3200,
+        matches: {
+          wins: 64,
+          losses: 58,
+          winRate: 64 / 122,
+          kills: 684,
+          deaths: 620,
+          kd: 684 / 620,
+          hsPercent: null,
+        },
+      },
+    ]);
+  });
+});
+
+describe('normalizeOperatorStats（干员统计归一）', () => {
+  it('榜单包装与裸数组都能读取，按回合数降序，无名称条目丢弃', () => {
+    const entry = (name: string, rounds: number) => ({
+      operator: name,
+      roundsPlayed: rounds,
+    });
+    const wrapped = normalizeOperatorStats({ operators: [entry('Zofia', 22), entry('Wamai', 30)] });
+    const plain = normalizeOperatorStats([entry('Zofia', 22), entry('Wamai', 30)]);
+    expect(wrapped.map((item) => item.name)).toEqual(['Wamai', 'Zofia']);
+    expect(plain).toEqual(wrapped);
+    expect(normalizeOperatorStats([{ roundsPlayed: 10 }, 'bad', null])).toEqual([]);
+    expect(normalizeOperatorStats(null)).toEqual([]);
+  });
+
+  it('字段逐项归一：胜率/KD 优先用上游值，缺失时用胜负与击杀死亡兜底计算', () => {
+    const operators = normalizeOperatorStats([
+      {
+        operator: 'Zofia',
+        side: 'Attacker',
+        roundsPlayed: 22,
+        wins: 9,
+        losses: 13,
+        winPercent: 40.9,
+        kills: 25,
+        deaths: 15,
+        kd: 1.67,
+        headshotPercent: 41.2,
+      },
+      {
+        name: 'Wamai',
+        side: 'Defender',
+        rounds: 30,
+        kills: 18,
+        deaths: 14,
+        headshotPercent: 20,
+      },
+    ]);
+    expect(operators).toEqual([
+      {
+        name: 'Wamai',
+        side: 'Defender',
+        rounds: 30,
+        wins: null,
+        losses: null,
+        winRate: null,
+        kills: 18,
+        deaths: 14,
+        kd: 18 / 14,
+        hsPercent: 0.2,
+      },
+      {
+        name: 'Zofia',
+        side: 'Attacker',
+        rounds: 22,
+        wins: 9,
+        losses: 13,
+        winRate: 0.409,
+        kills: 25,
+        deaths: 15,
+        kd: 1.67,
+        hsPercent: 41.2 / 100,
+      },
+    ]);
   });
 });
 

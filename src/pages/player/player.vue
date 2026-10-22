@@ -3,22 +3,33 @@ import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 
 import { useToast } from '@wot-ui/ui/components/wd-toast';
+import OperatorStatsList from '@/components/OperatorStatsList.vue';
 import RpTrendChart from '@/components/RpTrendChart.vue';
+import SeasonHistoryList from '@/components/SeasonHistoryList.vue';
 import StatBlock from '@/components/StatBlock.vue';
 import { isFavorite, toggleFavorite } from '@/services/favorites';
-import { fetchPlayerStats } from '@/services/stats';
+import { fetchPlayerOperators, fetchPlayerStats } from '@/services/stats';
 import { R6_THEME_VARS } from '@/styles/theme';
-import type { NormalizedModeStats, NormalizedPlayerStats, StatsPlatform } from '@/types/stats';
+import type {
+  NormalizedModeStats,
+  NormalizedOperatorStats,
+  NormalizedPlayerStats,
+  StatsPlatform,
+} from '@/types/stats';
 import { isStatsPlatform } from '@/types/stats';
 import { toAppError } from '@/types/errors';
-import { formatDecimal, formatDashValue, formatPercent, formatRelativeTime } from '@/utils/format';
+import { formatDashValue, formatDecimal, formatPercent, formatRelativeTime } from '@/utils/format';
 
 type LoadState = 'loading' | 'success' | 'error';
+type OperatorsState = 'loading' | 'success' | 'error';
 
 interface ModeRow {
   label: string;
   stats: NormalizedModeStats | null;
 }
+
+// 干员列表先展示出场最多的前 N 名，避免页面过长，支持展开
+const OPERATORS_PREVIEW_COUNT = 10;
 
 const toast = useToast();
 
@@ -31,6 +42,10 @@ const isFromCache = ref(false);
 const avatarFailed = ref(false);
 const starred = ref(false);
 
+const operatorsState = ref<OperatorsState>('loading');
+const operators = ref<NormalizedOperatorStats[]>([]);
+const showAllOperators = ref(false);
+
 const query = ref<{ nickname: string; platform: StatsPlatform }>({
   nickname: '',
   platform: 'pc',
@@ -42,14 +57,27 @@ const rankedMatches = computed(() => ranked.value?.matches ?? null);
 const rpPoints = computed(() =>
   (ranked.value?.rpHistory ?? []).filter((point) => point.rp !== null),
 );
+const seasonHistory = computed(() => stats.value?.seasonHistory ?? []);
 const modeRows = computed<ModeRow[]>(() => [
   { label: '排位', stats: rankedMatches.value },
-  { label: '快速匹配', stats: stats.value?.casual ?? null },
   { label: '非排位', stats: stats.value?.unranked ?? null },
+  { label: '快速匹配', stats: stats.value?.casual ?? null },
+  { label: '活动', stats: stats.value?.event ?? null },
 ]);
+const visibleOperators = computed(() =>
+  showAllOperators.value ? operators.value : operators.value.slice(0, OPERATORS_PREVIEW_COUNT),
+);
 const identityInitials = computed(() =>
   (stats.value?.identity.nickname ?? '??').slice(0, 2).toUpperCase(),
 );
+
+function matchCount(row: ModeRow): number | null {
+  const statsRow = row.stats;
+  if (statsRow === null || (statsRow.wins === null && statsRow.losses === null)) {
+    return null;
+  }
+  return (statsRow.wins ?? 0) + (statsRow.losses ?? 0);
+}
 
 function readParam(options: unknown, key: string): string | null {
   if (typeof options !== 'object' || options === null) {
@@ -73,7 +101,7 @@ function onToggleStar() {
   toast.show(result.starred ? '已加入收藏' : '已取消收藏');
 }
 
-async function loadStats() {
+async function loadStats(): Promise<boolean> {
   state.value = 'loading';
   errorDetail.value = null;
   try {
@@ -87,27 +115,48 @@ async function loadStats() {
       platform: query.value.platform,
     });
     state.value = 'success';
+    return true;
   } catch (error) {
     const appError = toAppError(error);
     errorCode.value = appError.code;
     // 云端 errMsg 原样展示，便于不查服务端日志时定位配置类问题
     errorDetail.value = appError.detail;
     state.value = 'error';
+    return false;
   }
 }
 
-function retry() {
-  void loadStats();
+/**
+ * 干员统计独立加载：失败或未配置上游都不影响主战绩展示，
+ * 卡片内给出占位说明即可。
+ */
+async function loadOperators() {
+  operatorsState.value = 'loading';
+  try {
+    const result = await fetchPlayerOperators(query.value.nickname, query.value.platform);
+    operators.value = result.operators;
+    operatorsState.value = 'success';
+  } catch {
+    operatorsState.value = 'error';
+  }
 }
 
-onLoad((options) => {
+async function retry() {
+  if (await loadStats()) {
+    await loadOperators();
+  }
+}
+
+onLoad(async (options) => {
   const nickname = readParam(options, 'nickname') ?? '';
   const platformParam = readParam(options, 'platform');
   query.value = {
     nickname,
     platform: isStatsPlatform(platformParam) ? platformParam : 'pc',
   };
-  void loadStats();
+  if (await loadStats()) {
+    await loadOperators();
+  }
 });
 </script>
 
@@ -173,7 +222,7 @@ onLoad((options) => {
         <wd-card>
           <template #title>
             <view class="card__header">
-              <text class="card__title">排位 · 当前赛季</text>
+              <text class="card__title">当前赛季</text>
               <text class="card__tag">{{ ranked?.season.name ?? '未知赛季' }}</text>
             </view>
           </template>
@@ -184,6 +233,10 @@ onLoad((options) => {
                 {{ formatDashValue(ranked.rp.current) }} RP
                 <template v-if="ranked.rp.max !== null">· 赛季最高 {{ ranked.rp.max }}</template>
               </text>
+              <!-- 真值判断兼容旧缓存/旧云端数据结构（无 max 字段时为 undefined） -->
+              <text v-if="ranked.rank.max" class="rank-line__max-rank">
+                赛季最高段位 {{ ranked.rank.max }}
+              </text>
             </view>
             <view class="card__row">
               <StatBlock label="K/D" :value="formatDecimal(rankedMatches?.kd ?? null)" />
@@ -191,6 +244,15 @@ onLoad((options) => {
               <StatBlock label="爆头率" :value="formatPercent(ranked.hsPercent)" />
             </view>
             <view class="card__row">
+              <StatBlock
+                label="场次"
+                :value="
+                  rankedMatches === null ||
+                  (rankedMatches.wins === null && rankedMatches.losses === null)
+                    ? null
+                    : (rankedMatches.wins ?? 0) + (rankedMatches.losses ?? 0)
+                "
+              />
               <StatBlock
                 label="胜 / 负"
                 :value="
@@ -200,14 +262,6 @@ onLoad((options) => {
                 "
               />
               <StatBlock label="RP 最高" :value="formatDashValue(ranked.rp.max)" />
-              <StatBlock
-                label="MMR（当前 / 峰值）"
-                :value="
-                  ranked.mmr.current === null && ranked.mmr.peak === null
-                    ? null
-                    : `${formatDashValue(ranked.mmr.current)} / ${formatDashValue(ranked.mmr.peak)}`
-                "
-              />
             </view>
           </template>
           <text v-else class="card__empty">当前赛季排位数据未知</text>
@@ -223,27 +277,75 @@ onLoad((options) => {
             </view>
           </template>
           <RpTrendChart v-if="rpPoints.length > 0" :points="rpPoints" />
-          <wd-empty v-else text="暂无 RP 历史数据" />
+          <text v-else class="card__hint">暂无 RP 历史数据</text>
         </wd-card>
 
-        <wd-card title="模式对比">
+        <wd-card title="模式数据">
           <view class="modes">
             <view class="modes__head">
               <text>模式</text>
-              <text>胜率</text>
+              <text>场次</text>
               <text>K/D</text>
-              <text>胜 / 负</text>
+              <text>胜率</text>
+              <text>爆头率</text>
             </view>
             <view v-for="row in modeRows" :key="row.label" class="modes__row">
               <text class="modes__label">{{ row.label }}</text>
-              <text>{{ formatPercent(row.stats?.winRate ?? null) }}</text>
+              <text>{{ formatDashValue(matchCount(row)) }}</text>
               <text>{{ formatDecimal(row.stats?.kd ?? null) }}</text>
-              <text>
-                {{ formatDashValue(row.stats?.wins ?? null) }} /
-                {{ formatDashValue(row.stats?.losses ?? null) }}
-              </text>
+              <text>{{ formatPercent(row.stats?.winRate ?? null, 0) }}</text>
+              <text>{{ formatPercent(row.stats?.hsPercent ?? null, 0) }}</text>
             </view>
           </view>
+        </wd-card>
+
+        <wd-card>
+          <template #title>
+            <view class="card__header">
+              <text class="card__title">往赛季数据</text>
+              <text v-if="seasonHistory.length > 0" class="card__tag"
+                >共 {{ seasonHistory.length }} 个赛季</text
+              >
+            </view>
+          </template>
+          <SeasonHistoryList v-if="seasonHistory.length > 0" :seasons="seasonHistory" />
+          <text v-else class="card__hint">暂无往赛季排位数据</text>
+        </wd-card>
+
+        <wd-card>
+          <template #title>
+            <view class="card__header">
+              <text class="card__title">干员统计</text>
+              <text class="card__tag">当前赛季 · 全模式</text>
+            </view>
+          </template>
+          <wd-skeleton
+            v-if="operatorsState === 'loading'"
+            theme="paragraph"
+            :row-col="[3]"
+            animation="gradient"
+          />
+          <view v-else-if="operatorsState === 'error'" class="card__hint">
+            <text>干员数据暂时不可用，不影响主战绩查询</text>
+            <text class="card__retry" @tap="loadOperators">重新加载</text>
+          </view>
+          <text v-else-if="operators.length === 0" class="card__hint">暂无干员统计数据</text>
+          <template v-else>
+            <OperatorStatsList :operators="visibleOperators" />
+            <view
+              v-if="operators.length > OPERATORS_PREVIEW_COUNT"
+              class="operators-toggle"
+              @tap="showAllOperators = !showAllOperators"
+            >
+              <text class="operators-toggle__text">
+                {{ showAllOperators ? '收起' : `展开全部 ${operators.length} 名干员` }}
+              </text>
+            </view>
+          </template>
+        </wd-card>
+
+        <wd-card title="地图统计">
+          <text class="card__hint">当前数据源暂不提供按地图统计的生涯数据</text>
         </wd-card>
 
         <wd-card custom-class="card--disabled">
@@ -375,6 +477,7 @@ onLoad((options) => {
 .card__row {
   display: flex;
   gap: 24rpx;
+  margin-top: 24rpx;
 }
 
 .card__empty {
@@ -382,12 +485,26 @@ onLoad((options) => {
   color: $r6-text-secondary;
 }
 
+/* 紧凑文字占位：替代 wd-empty（其默认大图标在深色主题下视觉突兀） */
+.card__hint {
+  display: block;
+  padding: 32rpx 0;
+  font-size: 24rpx;
+  color: $r6-text-secondary;
+  text-align: center;
+}
+
+.card__retry {
+  display: block;
+  margin-top: 12rpx;
+  color: $r6-accent;
+}
+
 .rank-line {
   display: flex;
   flex-direction: column;
   gap: 8rpx;
   padding: 20rpx 24rpx;
-  margin-bottom: 24rpx;
   border: 1rpx solid $r6-border;
   border-radius: 16rpx;
   background-color: $r6-surface-raised;
@@ -404,6 +521,11 @@ onLoad((options) => {
   color: $r6-text-secondary;
 }
 
+.rank-line__max-rank {
+  font-size: 24rpx;
+  color: $r6-accent;
+}
+
 .modes {
   display: flex;
   flex-direction: column;
@@ -413,7 +535,7 @@ onLoad((options) => {
 .modes__head,
 .modes__row {
   display: grid;
-  grid-template-columns: 1.6fr 1fr 1fr 1.4fr;
+  grid-template-columns: 1.3fr 0.8fr 0.8fr 0.9fr 0.9fr;
   gap: 12rpx;
   align-items: center;
 }
@@ -436,6 +558,17 @@ onLoad((options) => {
 
 .modes__label {
   font-weight: 600;
+}
+
+.operators-toggle {
+  display: flex;
+  justify-content: center;
+  padding: 20rpx 0 4rpx;
+}
+
+.operators-toggle__text {
+  font-size: 24rpx;
+  color: $r6-accent;
 }
 
 .matches-entry {

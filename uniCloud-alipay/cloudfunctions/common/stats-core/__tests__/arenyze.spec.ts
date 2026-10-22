@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { createArenyzeClient, createUpstreamClient, normalizeUpstreamStats } from '../index';
+import {
+  createArenyzeClient,
+  createUpstreamClient,
+  normalizeOperatorStats,
+  normalizeUpstreamStats,
+} from '../index';
 import type { NormalizedPlayerStats } from '../index';
 
 interface RecordedCall {
@@ -121,7 +126,8 @@ describe('createArenyzeClient（arenyze 上游适配）', () => {
     });
     expect(stats.ranked).toEqual({
       season: { id: 'Y11S3', name: 'Y11S3' },
-      rank: { name: 'PLATINUM II' },
+      // RP 历史 3300 (PLATINUM II) > 3000 (GOLD I)，赛季最高段位取高点段位名
+      rank: { name: 'PLATINUM II', max: 'PLATINUM II' },
       rp: { current: 3300, max: 3450 },
       mmr: { current: null, peak: null },
       matches: {
@@ -131,6 +137,7 @@ describe('createArenyzeClient（arenyze 上游适配）', () => {
         kills: 1500,
         deaths: 1200,
         kd: 1.25,
+        hsPercent: 0.5789,
       },
       hsPercent: 0.5789,
       rpHistory: [
@@ -140,6 +147,164 @@ describe('createArenyzeClient（arenyze 上游适配）', () => {
     });
     expect(stats.casual).toMatchObject({ wins: 50, losses: 50, kd: 1.2 });
     expect(stats.unranked).toMatchObject({ wins: 10, losses: 10, kd: 0.9 });
+    expect(stats.event).toBeNull();
+    // 榜单档响应不带 seasons 分段，赛季历史为空列表
+    expect(stats.seasonHistory).toEqual([]);
+  });
+
+  it('seasons 分段：赛季历史逐赛季落位（多地区取场次最多），event 从当前赛季分段读取', async () => {
+    const stats = await fetchNormalized({
+      player: { nameOnPlatform: 'Beaulo', platformType: 'uplay' },
+      account: {},
+      stats: {},
+      seasons: {
+        data: {
+          metadata: { currentSeason: 43 },
+          segments: [
+            {
+              attributes: { season: 43, gamemode: 'pvp_ranked' },
+              metadata: { name: 'Split Fire', shortName: 'Y11S3', rank: 'PLATINUM V' },
+              stats: {
+                matchesPlayed: { value: 65 },
+                wins: { value: 29 },
+                losses: { value: 30 },
+                kills: { value: 311 },
+                deaths: { value: 230 },
+                rankPoints: { value: 2971 },
+                maxRankPoints: { value: 3009 },
+              },
+            },
+            {
+              // 同赛季另一地区分段：场次更少，不参与赛季历史汇总
+              attributes: { season: 43, gamemode: 'pvp_ranked' },
+              metadata: { shortName: 'Y11S3' },
+              stats: {
+                matchesPlayed: { value: 5 },
+                wins: { value: 3 },
+                losses: { value: 2 },
+                kills: { value: 30 },
+                deaths: { value: 20 },
+                rankPoints: { value: 2500 },
+              },
+            },
+            {
+              attributes: { season: 42, gamemode: 'pvp_ranked' },
+              metadata: { name: 'System Override', shortName: 'Y11S2', rank: 'PLATINUM IV' },
+              stats: {
+                matchesPlayed: { value: 127 },
+                wins: { value: 64 },
+                losses: { value: 58 },
+                kills: { value: 684 },
+                deaths: { value: 620 },
+                rankPoints: { value: 3134 },
+                maxRankPoints: { value: 3200 },
+              },
+            },
+            {
+              // 历史赛季 casual 分段：赛季历史只收排位，不收录
+              attributes: { season: 42, gamemode: 'pvp_casual' },
+              metadata: { shortName: 'Y11S2' },
+              stats: { matchesPlayed: { value: 999 }, wins: { value: 50 }, losses: { value: 40 } },
+            },
+            {
+              attributes: { season: 43, gamemode: 'pvp_event' },
+              metadata: { name: 'Contested Gatherings' },
+              stats: {
+                wins: { value: 4 },
+                losses: { value: 6 },
+                kills: { value: 20 },
+                deaths: { value: 25 },
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    expect(stats.seasonHistory).toEqual([
+      {
+        seasonNumber: 42,
+        seasonId: 'Y11S2',
+        seasonName: 'System Override',
+        finalRankName: 'PLATINUM IV',
+        finalRp: 3134,
+        maxRp: 3200,
+        matches: {
+          wins: 64,
+          losses: 58,
+          winRate: 64 / 122,
+          kills: 684,
+          deaths: 620,
+          kd: 684 / 620,
+          hsPercent: null,
+        },
+      },
+    ]);
+    expect(stats.event).toMatchObject({ wins: 4, losses: 6, kd: 0.8 });
+  });
+
+  it('operators 端点：GET /v2/operators?modes=all，条目归一并按回合数降序', async () => {
+    const { fetchImpl, calls } = createRecordingFetch(
+      jsonResponse(200, {
+        player: { nameOnPlatform: 'Beaulo', platformType: 'uplay' },
+        operators: {
+          seasonYear: 'Y11S3',
+          operators: [
+            {
+              operator: 'Zofia',
+              side: 'Attacker',
+              roundsPlayed: 22,
+              wins: 9,
+              losses: 13,
+              winPercent: 40.9,
+              kills: 25,
+              deaths: 15,
+              kd: 1.67,
+              headshotPercent: 41.2,
+            },
+            {
+              operator: 'Wamai',
+              side: 'Defender',
+              roundsPlayed: 30,
+              kills: 18,
+              deaths: 14,
+              headshotPercent: 20,
+            },
+            { roundsPlayed: 10 },
+          ],
+        },
+      }),
+    );
+    const client = createArenyzeClient({ apiKey: 'test-key' }, fetchImpl);
+    const raw = await client.fetchPlayerOperators({ nickname: 'Beaulo', platform: 'pc' });
+
+    expect(calls).toHaveLength(1);
+    expect(String(calls[0].input)).toContain(
+      '/v2/operators?nameOnPlatform=Beaulo&platformType=uplay&modes=all',
+    );
+    const headers = calls[0].init as { headers: Record<string, string> };
+    expect(headers.headers['api-key']).toBe('test-key');
+
+    const operators = normalizeOperatorStats(raw);
+    expect(operators.map((item) => item.name)).toEqual(['Wamai', 'Zofia']);
+    expect(operators[0]).toEqual({
+      name: 'Wamai',
+      side: 'Defender',
+      rounds: 30,
+      wins: null,
+      losses: null,
+      winRate: null,
+      kills: 18,
+      deaths: 14,
+      kd: 18 / 14,
+      hsPercent: 0.2,
+    });
+    expect(operators[1]).toMatchObject({
+      name: 'Zofia',
+      winRate: 0.409,
+      kd: 1.67,
+      hsPercent: 41.2 / 100,
+    });
   });
 
   it('无榜单时从当前赛季 pvp_ranked 分段兜底，历史赛季分段不回退', async () => {
@@ -203,6 +368,8 @@ describe('createArenyzeClient（arenyze 上游适配）', () => {
     });
     expect(stats.casual).toMatchObject({ wins: 30, losses: 20, kd: 1.2 });
     expect(stats.unranked).toBeNull();
+    // 往赛季是独立出口：当前 43 赛季不重复收录，42 赛季只有 casual 也不收录
+    expect(stats.seasonHistory).toEqual([]);
   });
 
   it('currentSeason 缺失时按响应顺序取首个匹配分段', async () => {
@@ -237,6 +404,8 @@ describe('createArenyzeClient（arenyze 上游适配）', () => {
     expect(stats.ranked).toBeNull();
     expect(stats.casual).toBeNull();
     expect(stats.unranked).toBeNull();
+    expect(stats.event).toBeNull();
+    expect(stats.seasonHistory).toEqual([]);
   });
 
   it('HTTP 404 映射 E_NOT_FOUND，429 映射 E_RATE_LIMITED，401 映射认证失败', async () => {
@@ -287,6 +456,9 @@ describe('createUpstreamClient（上游分发）', () => {
       const client = createUpstreamClient(config);
       await expect(
         client.fetchPlayerStats({ nickname: 'n', platform: 'pc' }),
+      ).rejects.toMatchObject({ errCode: 'E_UPSTREAM_NOT_CONFIGURED' });
+      await expect(
+        client.fetchPlayerOperators({ nickname: 'n', platform: 'pc' }),
       ).rejects.toMatchObject({ errCode: 'E_UPSTREAM_NOT_CONFIGURED' });
     }
   });

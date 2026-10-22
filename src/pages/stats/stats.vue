@@ -57,18 +57,21 @@ function onRemoveFavorite(item: FavoritePlayer) {
     <view class="page">
       <view class="hero">
         <text class="hero__title">彩虹六号战绩查询</text>
-        <text class="hero__subtitle">输入玩家昵称，查询当前赛季排位表现</text>
+        <text class="hero__subtitle">输入玩家昵称，查询生涯模式、赛季与干员数据</text>
       </view>
 
-      <wd-tabs v-model="platformIndex">
-        <wd-tab
-          v-for="option in STATS_PLATFORM_OPTIONS"
-          :key="option.value"
-          :title="option.label"
-        />
-      </wd-tabs>
-
       <wd-card>
+        <view class="platform-switch">
+          <view
+            v-for="(option, index) in STATS_PLATFORM_OPTIONS"
+            :key="option.value"
+            class="platform-switch__item"
+            :class="{ 'platform-switch__item--active': platformIndex === index }"
+            @tap="platformIndex = index"
+          >
+            <text>{{ option.label }}</text>
+          </view>
+        </view>
         <wd-input
           v-model="nickname"
           clearable
@@ -153,6 +156,33 @@ function onRemoveFavorite(item: FavoritePlayer) {
 
 .query-input {
   margin-bottom: 24rpx;
+}
+
+/* 平台分段选择：自绘替代 wd-tabs，避免指示条错位，且与卡片视觉连成一体 */
+.platform-switch {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12rpx;
+  margin-bottom: 24rpx;
+}
+
+.platform-switch__item {
+  display: flex;
+  height: 72rpx;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid $r6-border;
+  border-radius: 12rpx;
+  background-color: $r6-surface-raised;
+  font-size: 26rpx;
+  color: $r6-text-secondary;
+}
+
+.platform-switch__item--active {
+  border-color: $r6-accent;
+  background-color: rgba(255, 140, 26, 0.15);
+  font-weight: 600;
+  color: $r6-accent;
 }
 
 .section {

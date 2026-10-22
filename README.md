@@ -79,7 +79,7 @@ npm run verify            # format:check + lint + type-check + test
 - 未知数据一律 `null`，展示层渲染为 `—`，禁止填零；
 - 比例字段（winRate / hsPercent）统一为 0..1 口径，上游百分数由 stats-core 的 `normalizeRatio` 换算；
 - `ranked.rpHistory` 是当前赛季 RP 随时间变化序列（RP 趋势折线图数据源），上游缺失时为空数组；点数上限 500；
-- “当前赛季”各模式（ranked / unranked / casual / event）只取当前赛季分段，不做历史回退；往赛季数据走独立的 `seasonHistory` 出口（按赛季号降序，同赛季多地区分段取场次数最多的一条，只收排位分段），不参与当前赛季兜底；
+- “当前赛季”各模式（ranked / unranked / casual / event）只取当前赛季分段，不做历史回退；往赛季数据走独立的 `seasonHistory` 出口（排除当前赛季，按赛季号降序，同赛季多地区分段取场次数最多的一条，只收排位分段），不参与当前赛季兜底；
 - 赛季最高段位名（`ranked.rank.max`）取 RP 历史中 RP 最高的带名时点；往赛季只有结算段位名与结算/最高 RP（上游分段无最高段位名口径）；
 - 干员统计来自 `/v2/operators?modes=all`（当前赛季、全模式聚合），条目按出场回合数降序；arenyze 未提供按玩家的地图统计端点，「地图统计」卡片为占位展示；
 - 上游平台口径映射：应用侧 `pc / psn / xbox` → arenyze `uplay / psn / xbl`，映射只发生在 stats-core 适配器内；
@@ -97,7 +97,7 @@ npm run verify            # format:check + lint + type-check + test
 ## 当前状态与下一步
 
 - [x] 工程骨架、校验链路（format/lint/type-check/test）、微信端构建
-- [x] stats 云对象 + 缓存 Schema + 归一化公共模块（含 48 个回归用例）
+- [x] stats 云对象 + 缓存 Schema + 归一化公共模块（含战绩归一化回归用例）
 - [x] 云链路联调验证（开发者工具）：客户端 SDK 初始化 → 云对象 → 参数校验 → 缓存读取 → 错误信封
 - [x] 五板块信息架构：战绩 / 电竞 / 资料库 / Agent / 个人中心（后三者为占位页）
 - [x] arenyze 上游适配 + RP 趋势图表（uCharts）+ 收藏玩家（本地存储）

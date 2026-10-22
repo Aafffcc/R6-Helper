@@ -1,6 +1,14 @@
 {
   "bsonType": "object",
-  "required": ["cacheKey", "platform", "nickname", "data", "fetchedAt", "expiresAt"],
+  "required": [
+    "cacheKey",
+    "platform",
+    "nickname",
+    "cacheVersion",
+    "data",
+    "fetchedAt",
+    "expiresAt"
+  ],
   "permission": {
     "read": false,
     "create": false,
@@ -27,9 +35,14 @@
       "maxLength": 32,
       "description": "查询昵称（已裁剪）"
     },
+    "cacheVersion": {
+      "bsonType": "int",
+      "minimum": 1,
+      "description": "归一化载荷结构版本；版本不匹配时忽略旧缓存并重新请求上游"
+    },
     "data": {
       "bsonType": "object",
-      "description": "NormalizedPlayerStats 归一化战绩，结构见 stats-core/index.d.ts"
+      "description": "归一化缓存载荷：主战绩为 NormalizedPlayerStats，干员统计为 { operators }，结构见 stats-core/index.d.ts"
     },
     "fetchedAt": {
       "bsonType": "long",
@@ -37,7 +50,7 @@
     },
     "expiresAt": {
       "bsonType": "long",
-      "description": "缓存过期时间戳（毫秒）；有效期口径见 stats-core.STATS_CACHE_TTL_MS"
+      "description": "缓存过期时间戳（毫秒）；有效期口径见 stats-core.STATS_CACHE_TTL_MS / OPERATORS_CACHE_TTL_MS"
     }
   }
 }
