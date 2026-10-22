@@ -257,14 +257,16 @@ async function resolveDownloadUrls(baseUrl, token, uploaded) {
     const entry = urls[index];
     console.log(`  ${item.cloudPath} -> ${entry?.tempFileURL ?? '<获取失败>'}`);
   }
+  // 支付宝云 getTempFileURL 的过期参数形如 expire_at（另有 expire/expires 变体），都要覆盖；
+  // 带签名不代表不可公开读（实测默认可直链），仅作提示引导验证
   const expiredSuspect = urls.some(
     (entry) =>
       typeof entry?.tempFileURL === 'string' &&
-      /[?&](expire|expires|Expires)=/.test(entry.tempFileURL),
+      /[?&](expire_at|expire|expires|Expires)=/.test(entry.tempFileURL),
   );
   if (expiredSuspect) {
     console.warn(
-      '[gen:upload-assets] 警告：返回 URL 带过期参数（临时链接）。请在控制台把云存储读取权限设为「所有用户可读」后重新运行 --resolve，或改用 fileID 换链方案。',
+      '[gen:upload-assets] 提示：返回 URL 带过期签名参数。请用不带参数的裸地址验证公开可读（如 curl -I 去参链接），HTTP 200 即可放心把域名前缀填入 VITE_ASSET_BASE_URL；若 403 需在控制台把云存储读取权限改为「所有用户可读」。',
     );
   }
 }
