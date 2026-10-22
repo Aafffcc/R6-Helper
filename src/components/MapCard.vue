@@ -40,8 +40,9 @@ function onImageError() {
 <style lang="scss" scoped>
 .map-card {
   display: flex;
-  /* 地图卡文案多（位置/改版），两列自适应铺满一行（内容区 686rpx - 20rpx 间隙） */
-  width: calc((100% - 20rpx) / 2);
+  /* 两列铺满内容区：686rpx（750 - 2×32 页边距）= 2×333 + 20 间隙；
+     百分比/calc 宽度在小程序组件宿主上会循环解析，见 OperatorCard 注释 */
+  width: 333rpx;
   box-sizing: border-box;
   flex-direction: column;
   align-items: center;

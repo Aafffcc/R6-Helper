@@ -42,8 +42,10 @@ function onImageError() {
 <style lang="scss" scoped>
 .catalog-card {
   display: flex;
-  /* 三列自适应铺满一行（内容区 686rpx - 2×20rpx 间隙），border-box 防止 padding 撑宽 */
-  width: calc((100% - 40rpx) / 3);
+  /* 三列铺满内容区：686rpx（750 - 2×32 页边距）= 3×215 + 2×20 间隙。
+     不能用 calc(100%/3)：百分比相对小程序组件宿主节点解析，宿主在 flex 里
+     宽度 auto，会循环解析塌缩成最小内容宽（真机已踩坑） */
+  width: 215rpx;
   box-sizing: border-box;
   flex-direction: column;
   align-items: center;
