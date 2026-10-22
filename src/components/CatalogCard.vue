@@ -42,7 +42,9 @@ function onImageError() {
 <style lang="scss" scoped>
 .catalog-card {
   display: flex;
-  width: 208rpx;
+  /* 三列自适应铺满一行（内容区 686rpx - 2×20rpx 间隙），border-box 防止 padding 撑宽 */
+  width: calc((100% - 40rpx) / 3);
+  box-sizing: border-box;
   flex-direction: column;
   align-items: center;
   padding: 20rpx;
@@ -73,9 +75,13 @@ function onImageError() {
 }
 
 .catalog-card__name {
+  max-width: 100%;
   margin-top: 12rpx;
+  overflow: hidden;
   font-size: 26rpx;
   color: $r6-text-primary;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .catalog-card__caption {

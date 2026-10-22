@@ -40,7 +40,9 @@ function onImageError() {
 <style lang="scss" scoped>
 .map-card {
   display: flex;
-  width: 208rpx;
+  /* 地图卡文案多（位置/改版），两列自适应铺满一行（内容区 686rpx - 20rpx 间隙） */
+  width: calc((100% - 20rpx) / 2);
+  box-sizing: border-box;
   flex-direction: column;
   align-items: center;
   padding: 20rpx;
@@ -50,14 +52,14 @@ function onImageError() {
 }
 
 .map-card__image {
-  width: 168rpx;
-  height: 100rpx;
+  width: 100%;
+  height: 140rpx;
 }
 
 .map-card__fallback {
   display: flex;
-  width: 168rpx;
-  height: 100rpx;
+  width: 100%;
+  height: 140rpx;
   align-items: center;
   justify-content: center;
   border-radius: 12rpx;
