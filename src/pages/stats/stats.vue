@@ -53,7 +53,7 @@ function onRemoveFavorite(item: FavoritePlayer) {
 </script>
 
 <template>
-  <wd-config-provider :theme-vars="R6_THEME_VARS">
+  <wd-config-provider theme="dark" :theme-vars="R6_THEME_VARS">
     <view class="page">
       <view class="hero">
         <text class="hero__title">彩虹六号战绩查询</text>

@@ -101,7 +101,7 @@ function joinCaption(parts: ReadonlyArray<string | null>): string | null {
 </script>
 
 <template>
-  <wd-config-provider :theme-vars="R6_THEME_VARS">
+  <wd-config-provider theme="dark" :theme-vars="R6_THEME_VARS">
     <view class="page">
       <wd-tabs swipeable>
         <wd-tab title="干员">

@@ -30,12 +30,14 @@ declare module '@qiun/ucharts' {
       labelCount?: number;
       fontSize?: number;
       fontColor?: string;
+      axisLineColor?: string;
       lineHeight?: number;
       marginTop?: number;
     };
     yAxis?: {
       disabled?: boolean;
       gridColor?: string;
+      axisLineColor?: string;
       splitNumber?: number;
       fontSize?: number;
       fontColor?: string;

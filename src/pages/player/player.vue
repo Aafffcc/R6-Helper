@@ -161,7 +161,7 @@ onLoad(async (options) => {
 </script>
 
 <template>
-  <wd-config-provider :theme-vars="R6_THEME_VARS">
+  <wd-config-provider theme="dark" :theme-vars="R6_THEME_VARS">
     <view class="page">
       <wd-skeleton
         v-if="state === 'loading'"

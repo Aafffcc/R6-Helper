@@ -11,12 +11,31 @@ const props = defineProps<{
 const instance = getCurrentInstance();
 const canvasId = `rp-trend-${Math.random().toString(36).slice(2, 10)}`;
 
-function formatAxisLabel(timestamp: number | null): string {
+function formatDateLabel(timestamp: number | null): string {
   if (timestamp === null) {
     return '';
   }
   const date = new Date(timestamp);
   return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function formatTimeLabel(timestamp: number | null): string {
+  if (timestamp === null) {
+    return '';
+  }
+  const date = new Date(timestamp);
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+function formatAxisLabels(points: RpHistoryPoint[]): string[] {
+  const dateLabels = points.map((point) => formatDateLabel(point.timestamp));
+  const hasDuplicateDates =
+    new Set(dateLabels.filter(Boolean)).size < dateLabels.filter(Boolean).length;
+  return points.map((point) =>
+    hasDuplicateDates ? formatTimeLabel(point.timestamp) : formatDateLabel(point.timestamp),
+  );
 }
 
 function renderChart() {
@@ -54,7 +73,7 @@ function renderChart() {
       width,
       height,
       pixelRatio: 1,
-      categories: valid.map((point) => formatAxisLabel(point.timestamp)),
+      categories: formatAxisLabels(valid),
       series: [
         {
           name: 'RP',
@@ -65,7 +84,7 @@ function renderChart() {
       // 与卡片底色一致，避免画布白底突兀
       background: '#1F232B',
       color: ['#ff8c1a'],
-      padding: [16, 12, 4, 8],
+      padding: [16, 12, 20, 8],
       animation: true,
       legend: { show: false },
       dataLabel: false,
@@ -74,11 +93,13 @@ function renderChart() {
         labelCount: 4,
         fontSize: 10,
         fontColor: '#9aa1ac',
+        axisLineColor: '#3a404c',
         lineHeight: 1.2,
-        marginTop: 0,
+        marginTop: 8,
       },
       yAxis: {
         gridColor: '#2c313b',
+        axisLineColor: '#3a404c',
         splitNumber: 4,
         fontSize: 10,
         fontColor: '#9aa1ac',
@@ -124,7 +145,9 @@ watch(
 }
 
 .rp-trend__canvas {
+  display: block;
   width: 100%;
-  height: 400rpx;
+  height: 320rpx;
+  background-color: $r6-surface;
 }
 </style>
