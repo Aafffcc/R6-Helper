@@ -1,0 +1,232 @@
+[
+  {
+    "id": "border",
+    "name": "Border",
+    "location": "Middle East",
+    "releaseDate": "Dust Line (May 2016)",
+    "playlists": ["Standard", "Ranked"],
+    "mapReworked": "March 2021"
+  },
+  {
+    "id": "favela",
+    "name": "Favela",
+    "location": "Brazil",
+    "releaseDate": "Skull Rain (August 2016)",
+    "playlists": ["Quick Match", "Team Deathmatch"],
+    "mapReworked": "June 2021"
+  },
+  {
+    "id": "house",
+    "name": "House",
+    "location": "Los Angeles, California",
+    "releaseDate": "Base game (December 2015)",
+    "playlists": ["Quick Match"],
+    "mapReworked": "June 2020"
+  },
+  {
+    "id": "kanal",
+    "name": "Kanal",
+    "location": "Hamburg, Germany",
+    "releaseDate": "Launch (December 2015)",
+    "playlists": ["Standard", "Ranked"],
+    "mapReworked": "September 2019"
+  },
+  {
+    "id": "outback",
+    "name": "Outback",
+    "location": "Australia",
+    "releaseDate": "Burnt Horizon (March 2019)",
+    "playlists": ["Ranked", "Standard"],
+    "mapReworked": "November 2021"
+  },
+  {
+    "id": "hereford-base",
+    "name": "Hereford Base",
+    "location": "United Kingdom",
+    "releaseDate": "Base game (December 2015)",
+    "playlists": ["Quick Match"],
+    "mapReworked": "September 2018"
+  },
+  {
+    "id": "lair",
+    "name": "Lair",
+    "location": "Portugal",
+    "releaseDate": "Operation Deep Freeze (November 2023)",
+    "playlists": ["Standard", "Quick Match", "Ranked", "Team Deathmatch"],
+    "mapReworked": "Modernized - September 2025"
+  },
+  {
+    "id": "nighthaven-labs",
+    "name": "Nighthaven Labs",
+    "location": "Offshore",
+    "releaseDate": "Operation Solar Raid (December 2022)",
+    "playlists": ["Standard", "Ranked", "Quick Match", "Team Deathmatch"],
+    "mapReworked": "Modernized - September 2025"
+  },
+  {
+    "id": "consulate",
+    "name": "Consulate",
+    "location": "Abidjan, Ivory Coast",
+    "releaseDate": "Base game (December 2015)",
+    "playlists": ["Quick Match", "Ranked", "Standard"],
+    "mapReworked": "May 2023 Reworked, Modernized - September 2025"
+  },
+  {
+    "id": "bank",
+    "name": "Bank",
+    "location": "Los Angeles, California",
+    "releaseDate": "Base game (December 2015)",
+    "playlists": ["Quick Match", "Standard", "Ranked"],
+    "mapReworked": "Small rework - September 2021, Modernized June 2025"
+  },
+  {
+    "id": "chalet",
+    "name": "Chalet",
+    "location": "Courchevel, France",
+    "releaseDate": "Base game (December 2015)",
+    "playlists": ["Quick Match", "Ranked", "Standard"],
+    "mapReworked": "September 2020 Reworked, Modernized June 2025"
+  },
+  {
+    "id": "clubhouse",
+    "name": "Clubhouse",
+    "location": "Hanover, Germany",
+    "releaseDate": "Base game (December 2015)",
+    "playlists": ["Standard", "Quick Match", "Ranked"],
+    "mapReworked": "Small rework - September 2021, Modernized June 2025"
+  },
+  {
+    "id": "kafe-dostoyevsky",
+    "name": "Kafe Dostoyevsky",
+    "location": "Noscow, Russia",
+    "releaseDate": "Base game (December 2015)",
+    "playlists": ["Ranked", "Standard"],
+    "mapReworked": "June 2019 Reworked, Modernized June 2025"
+  },
+  {
+    "id": "stadium-alpha",
+    "name": "Stadium Alpha",
+    "location": "Greece",
+    "releaseDate": "Operation Brutal Swarm (September 2022)",
+    "playlists": ["Standard", "Quick Match", "Team Deathmatch"],
+    "mapReworked": "June 2024"
+  },
+  {
+    "id": "stadium-bravo",
+    "name": "Stadium Bravo",
+    "location": "Greece",
+    "releaseDate": "Operation Brutal Swarm (September 2022)",
+    "playlists": ["Quick Match", "Standard"],
+    "mapReworked": "June 2024"
+  },
+  {
+    "id": "fortress",
+    "name": "Fortress",
+    "location": "Morocco",
+    "releaseDate": "Wind bastion (December 2018)",
+    "playlists": ["Quick Match"],
+    "mapReworked": "Modernized - December 2025"
+  },
+  {
+    "id": "theme-park",
+    "name": "Theme Park",
+    "location": "Hong Kong",
+    "releaseDate": "Blood Orchid (August 2017)",
+    "playlists": ["Standard", "Ranked", "Team Deathmatch"],
+    "mapReworked": "December 2019 Reworked, Modernized December 2025"
+  },
+  {
+    "id": "skyscraper",
+    "name": "Skyscraper",
+    "location": "Nagoya, Japan",
+    "releaseDate": "Red Crow (November 2016)",
+    "playlists": ["Standard", "Ranked", "Team Deathmatch"],
+    "mapReworked": "December 2020 Reworked, Modernized December 2025"
+  },
+  {
+    "id": "coastline",
+    "name": "Coastline",
+    "location": "Ibiza, Spain",
+    "releaseDate": "Velvet Shell (February 2017)",
+    "playlists": ["Quick Match", "Ranked", "Team Deathmatch", "Standard"],
+    "mapReworked": "Small rework - September 2021, March 2026"
+  },
+  {
+    "id": "oregon",
+    "name": "Oregon",
+    "location": "Redmond, Oregon",
+    "releaseDate": "Base game (December 2015)",
+    "playlists": ["Ranked", "Standard"],
+    "mapReworked": "March 2020, Small Rework - March 2026"
+  },
+  {
+    "id": "villa",
+    "name": "Villa",
+    "location": "Tuscany, Italy",
+    "releaseDate": "Para Bellum (June 2018)",
+    "playlists": ["Ranked", "Team Deathmatch", "Standard", "Quick Match"],
+    "mapReworked": "Small Rework - March 2026"
+  },
+  {
+    "id": "close-quarter",
+    "name": "Close Quarter",
+    "location": "Greece",
+    "releaseDate": "Operation Vector Glare (June 2022)",
+    "playlists": ["Team Deathmatch"],
+    "mapReworked": null
+  },
+  {
+    "id": "emerald-plains",
+    "name": "Emerald Plains",
+    "location": "Ireland",
+    "releaseDate": "Demon Veil (April 2022)",
+    "playlists": ["Quick Match", "Standard", "Ranked", "Team Deathmatch"],
+    "mapReworked": null
+  },
+  {
+    "id": "presidential-plane",
+    "name": "Presidential Plane",
+    "location": "London, United Kingdom",
+    "releaseDate": "Base game (December 2015)",
+    "playlists": ["Quick Match"],
+    "mapReworked": null
+  },
+  {
+    "id": "tower",
+    "name": "Tower",
+    "location": "Seoul, South Korea",
+    "releaseDate": "White Noise (November 2017)",
+    "playlists": ["Quick Match"],
+    "mapReworked": null
+  },
+  {
+    "id": "yacht",
+    "name": "Yacht",
+    "location": "Baffin Bay",
+    "releaseDate": "Black Ice (February 2016)",
+    "playlists": ["Quick Match"],
+    "mapReworked": null
+  },
+  {
+    "id": "district",
+    "name": "District",
+    "location": "Detroit, Michigan",
+    "releaseDate": "Operation Daybreak (June 2025)",
+    "playlists": ["Dual Front"],
+    "mapReworked": null
+  },
+  {
+    "id": "calypso-casino",
+    "name": "Calypso Casino",
+    "location": "Las Vegas, Nevada",
+    "releaseDate": "Operation System Override (June 2026)",
+    "playlists": [
+      "Ranked",
+      "Unranked",
+      "Quick Match",
+      "Team Deathmatch",
+      "Landmark Drill and Clear House."
+    ],
+    "mapReworked": null
+  }
+]

@@ -10,6 +10,6 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.spec.ts', 'uniCloud-alipay/**/*.spec.ts'],
+    include: ['src/**/*.spec.ts', 'uniCloud-alipay/**/*.spec.ts', 'scripts/**/*.spec.ts'],
   },
 });
