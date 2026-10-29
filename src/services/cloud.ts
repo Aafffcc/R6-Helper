@@ -7,7 +7,8 @@ let cloudClient: UniCloudInstance | null = null;
 
 // CLI 构建不会自动注入 uniCloud 运行时（那需要 HBuilderX 的运行菜单），
 // 因此显式 import SDK，并用 .env.local 的空间配置初始化，联调不依赖 HBuilderX。
-function getCloudClient(): UniCloudInstance {
+// 导出供流式调用等需要直接操作客户端实例的场景使用（SSEChannel / 双参数方法）。
+export function getCloudClient(): UniCloudInstance {
   if (!isUnicloudConfigured()) {
     throw new AppError(
       'E_CLOUD_NOT_CONFIGURED',

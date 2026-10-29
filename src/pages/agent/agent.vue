@@ -1,17 +1,82 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
 
-import { askAgent, type AgentMessage } from '@/services/agent';
+import {
+  askAgentStream,
+  stopAgentStream,
+  warmAgentChannel,
+  type AgentFrame,
+  type AgentMessage,
+} from '@/services/agent';
 
-const messages = ref<AgentMessage[]>([]);
+/** 页面消息模型：reasoning/thinking 只用于本地渲染，不随上下文回传云端。 */
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  reasoning: string;
+  thinking: boolean;
+  thinkExpanded: boolean;
+  thinkMs: number | null;
+}
+
+const messages = ref<ChatMessage[]>([]);
 const draft = ref('');
 const loading = ref(false);
 const scrollIntoView = ref('');
 const canSend = computed(() => draft.value.trim() !== '' && !loading.value);
+const sendButtonLabel = computed(() => (loading.value ? '停止' : '发送'));
+const sendButtonDisabled = computed(() => !loading.value && !canSend.value);
+
+/** 代际计数：停止或重新发送后，旧请求的帧回调与收尾逻辑全部失效 */
+let generation = 0;
+
+// 进入页面即预建流式通道，个推握手不占用发送后的首字延迟
+onShow(() => {
+  warmAgentChannel();
+});
 
 async function scrollToLatest(): Promise<void> {
   await nextTick();
   scrollIntoView.value = `message-${messages.value.length - 1}`;
+}
+
+function createChatMessage(role: ChatMessage['role'], content: string): ChatMessage {
+  return { role, content, reasoning: '', thinking: false, thinkExpanded: false, thinkMs: null };
+}
+
+function applyFrame(message: ChatMessage, frame: AgentFrame, startedAt: number): void {
+  if (frame.type === 'think') {
+    message.reasoning += frame.text;
+    return;
+  }
+  message.content += frame.text;
+  if (message.thinkMs === null) {
+    message.thinkMs = Date.now() - startedAt;
+  }
+  message.thinking = false;
+}
+
+function showThinkBlock(message: ChatMessage): boolean {
+  return message.role === 'assistant' && (message.thinking || message.reasoning !== '');
+}
+
+function showThinkBody(message: ChatMessage): boolean {
+  return message.thinking || message.thinkExpanded;
+}
+
+function thinkLabel(message: ChatMessage): string {
+  if (message.thinking) {
+    return '深度思考中…';
+  }
+  if (message.thinkMs === null) {
+    return '已深度思考';
+  }
+  return `已深度思考（${(message.thinkMs / 1000).toFixed(1)} 秒）`;
+}
+
+function toggleThink(message: ChatMessage): void {
+  message.thinkExpanded = !message.thinkExpanded;
 }
 
 async function sendMessage(text = draft.value): Promise<void> {
@@ -25,20 +90,75 @@ async function sendMessage(text = draft.value): Promise<void> {
   }
 
   draft.value = '';
-  messages.value.push({ role: 'user', content });
+  messages.value.push(createChatMessage('user', content));
+  // 占位消息入数组后必须从数组取回响应式代理：直接改原始对象不触发渲染（会整块出现）
+  const placeholder = createChatMessage('assistant', '');
+  placeholder.thinking = true;
+  messages.value.push(placeholder);
+  const reply = messages.value[messages.value.length - 1];
   loading.value = true;
+  const currentGeneration = ++generation;
+  const startedAt = Date.now();
   await scrollToLatest();
 
   try {
-    const answer = await askAgent(messages.value.slice(-16));
-    messages.value.push({ role: 'assistant', content: answer });
+    // 占位的 assistant 消息不发给云端（校验要求末条必须是 user）；思维链字段不回传上下文
+    const input: AgentMessage[] = messages.value
+      .slice(0, -1)
+      .slice(-16)
+      .map(({ role, content: messageContent }) => ({ role, content: messageContent }));
+    const { answer, reasoning } = await askAgentStream(input, (frame) => {
+      if (currentGeneration !== generation) {
+        return;
+      }
+      applyFrame(reply, frame, startedAt);
+      void scrollToLatest();
+    });
+    if (currentGeneration !== generation) {
+      return;
+    }
+    // 通道降级（transport=plain）或帧全部为空时，用最终回答与思维链补显
+    if (reply.reasoning === '' && reasoning !== '') {
+      reply.reasoning = reasoning;
+    }
+    reply.content = reply.content !== '' ? reply.content : answer;
+    reply.thinking = false;
   } catch (error) {
+    if (currentGeneration !== generation) {
+      return;
+    }
     const message = error instanceof Error ? error.message : '请求失败，请稍后重试';
     uni.showToast({ title: message, icon: 'none', duration: 2600 });
+    if (reply.content === '') {
+      messages.value.pop();
+    }
   } finally {
-    loading.value = false;
-    await scrollToLatest();
+    if (currentGeneration === generation) {
+      loading.value = false;
+      await scrollToLatest();
+    }
   }
+}
+
+function stopStreaming(): void {
+  stopAgentStream();
+  generation += 1;
+  loading.value = false;
+  const last = messages.value[messages.value.length - 1];
+  if (last && last.role === 'assistant') {
+    last.thinking = false;
+    if (last.content === '') {
+      last.content = '（已停止生成）';
+    }
+  }
+}
+
+function onComposerAction(): void {
+  if (loading.value) {
+    stopStreaming();
+    return;
+  }
+  void sendMessage();
 }
 </script>
 
@@ -50,6 +170,8 @@ async function sendMessage(text = draft.value): Promise<void> {
         <text class="agent-header__subtitle">干员、地图与战术讨论</text>
       </view>
       <view class="agent-status"><view class="agent-status__dot" />AI</view>
+      <!-- TEMP: Phase 0 Spike 入口，Go 决策后随 demo 页一起删除 -->
+      <navigator class="agent-spike-link" url="/pages/agent/demo">Spike</navigator>
     </view>
 
     <scroll-view
@@ -82,10 +204,25 @@ async function sendMessage(text = draft.value): Promise<void> {
           class="message-row"
           :class="`message-row--${message.role}`"
         >
-          <view class="message-bubble">{{ message.content }}</view>
-        </view>
-        <view v-if="loading" id="message-loading" class="message-row message-row--assistant">
-          <view class="message-bubble message-bubble--typing">正在组织回答…</view>
+          <view class="message-bubble" :class="{ 'message-bubble--typing': message.thinking }">
+            <view v-if="showThinkBlock(message)" class="think">
+              <view class="think__header" @tap="toggleThink(message)">
+                <text
+                  class="think__label"
+                  :class="{ 'think__label--thinking': message.thinking }"
+                  >{{ thinkLabel(message) }}</text
+                >
+                <text v-if="!message.thinking" class="think__toggle">{{
+                  message.thinkExpanded ? '收起' : '展开'
+                }}</text>
+              </view>
+              <view v-if="showThinkBody(message)" class="think__body">
+                <text>{{ message.reasoning !== '' ? message.reasoning : '正在思考…' }}</text>
+              </view>
+            </view>
+            <text v-if="message.content !== ''">{{ message.content }}</text>
+            <text v-else-if="!showThinkBlock(message)">正在思考…</text>
+          </view>
         </view>
       </view>
       <view class="scroll-anchor" />
@@ -102,7 +239,9 @@ async function sendMessage(text = draft.value): Promise<void> {
         confirm-type="send"
         @confirm="sendMessage()"
       />
-      <button class="composer__send" :disabled="!canSend" @tap="sendMessage()">发送</button>
+      <button class="composer__send" :disabled="sendButtonDisabled" @tap="onComposerAction">
+        {{ sendButtonLabel }}
+      </button>
     </view>
     <text class="disclaimer">回答由 AI 生成，请结合当前版本与实战判断</text>
   </view>
@@ -148,6 +287,17 @@ async function sendMessage(text = draft.value): Promise<void> {
   gap: 10rpx;
   color: $r6-text-secondary;
   font-size: 22rpx;
+}
+
+/* TEMP: Phase 0 Spike 入口样式，随入口一起删除 */
+.agent-spike-link {
+  align-self: center;
+  margin-left: 16rpx;
+  padding: 4rpx 14rpx;
+  border: 1rpx solid $r6-border;
+  border-radius: 999rpx;
+  color: $r6-text-secondary;
+  font-size: 20rpx;
 }
 
 .agent-status__dot {
@@ -246,6 +396,53 @@ async function sendMessage(text = draft.value): Promise<void> {
 
 .message-bubble--typing {
   color: $r6-text-secondary;
+}
+
+.think {
+  margin-bottom: 16rpx;
+  padding: 14rpx 18rpx;
+  border-left: 4rpx solid $r6-border;
+  border-radius: 6rpx;
+  background: $r6-bg;
+}
+
+.think__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.think__label {
+  color: $r6-text-secondary;
+  font-size: 22rpx;
+}
+
+.think__label--thinking {
+  animation: think-pulse 1.4s ease-in-out infinite;
+}
+
+.think__toggle {
+  color: $r6-text-secondary;
+  font-size: 20rpx;
+}
+
+.think__body {
+  margin-top: 12rpx;
+  color: $r6-text-secondary;
+  font-size: 23rpx;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+@keyframes think-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 .scroll-anchor {

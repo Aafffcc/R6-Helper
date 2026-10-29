@@ -1,10 +1,14 @@
 {
   "name": "agent",
-  "version": "0.1.0",
-  "description": "R6 垂直领域 Agent 云对象",
+  "version": "0.2.0",
+  "description": "R6 垂直领域 Agent 云对象（uni-ai 模型层 + SSEChannel 流式）",
   "main": "index.obj.js",
   "dependencies": {
     "agent-core": "file:../common/agent-core",
     "uni-config-center": "file:../common/uni-config-center"
+  },
+  "extensions": {
+    "uni-cloud-ai": {},
+    "uni-cloud-push": {}
   }
 }

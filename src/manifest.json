@@ -1,6 +1,6 @@
 {
   "name": "R6-Helper",
-  "appid": "wx840586c9b02dd724",
+  "appid": "__UNI__00CE8E1",
   "description": "彩虹六号战绩查询助手",
   "versionName": "0.1.0",
   "versionCode": "1",
@@ -13,9 +13,27 @@
       "es6": true,
       "minified": true
     },
-    "usingComponents": true
+    "usingComponents": true,
+    "unipush": {
+      "enable": true
+    }
   },
   "h5": {
     "title": "R6-Helper"
+  },
+  "app-plus": {
+    "modules": {
+      "Push": {}
+    },
+    "distribute": {
+      "sdkConfigs": {
+        "push": {
+          "unipush": {
+            "version": "2",
+            "offline": false
+          }
+        }
+      }
+    }
   }
 }
