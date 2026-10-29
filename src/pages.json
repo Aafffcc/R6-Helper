@@ -37,6 +37,12 @@
       }
     },
     {
+      "path": "pages/agent/demo",
+      "style": {
+        "navigationBarTitleText": "Agent Spike"
+      }
+    },
+    {
       "path": "pages/profile/profile",
       "style": {
         "navigationBarTitleText": "我的"
