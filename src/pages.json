@@ -39,7 +39,7 @@
     {
       "path": "pages/profile/profile",
       "style": {
-        "navigationBarTitleText": "个人中心"
+        "navigationBarTitleText": "我的"
       }
     }
   ],
@@ -51,23 +51,33 @@
     "list": [
       {
         "pagePath": "pages/stats/stats",
-        "text": "战绩"
+        "text": "战绩",
+        "iconPath": "static/tabbar/stats.png",
+        "selectedIconPath": "static/tabbar/stats-selected.png"
       },
       {
         "pagePath": "pages/esports/esports",
-        "text": "电竞"
+        "text": "电竞",
+        "iconPath": "static/tabbar/esports.png",
+        "selectedIconPath": "static/tabbar/esports-selected.png"
       },
       {
         "pagePath": "pages/library/library",
-        "text": "资料库"
+        "text": "资料库",
+        "iconPath": "static/tabbar/library.png",
+        "selectedIconPath": "static/tabbar/library-selected.png"
       },
       {
         "pagePath": "pages/agent/agent",
-        "text": "Agent"
+        "text": "Agent",
+        "iconPath": "static/tabbar/agent.png",
+        "selectedIconPath": "static/tabbar/agent-selected.png"
       },
       {
         "pagePath": "pages/profile/profile",
-        "text": "个人中心"
+        "text": "我的",
+        "iconPath": "static/tabbar/profile.png",
+        "selectedIconPath": "static/tabbar/profile-selected.png"
       }
     ]
   },
