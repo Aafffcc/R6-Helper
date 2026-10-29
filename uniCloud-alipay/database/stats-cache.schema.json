@@ -42,7 +42,7 @@
     },
     "data": {
       "bsonType": "object",
-      "description": "归一化缓存载荷：主战绩为 NormalizedPlayerStats，干员统计为 { operators }，结构见 stats-core/index.d.ts"
+      "description": "归一化缓存载荷：主战绩为 NormalizedPlayerStats，干员统计为 { operators }，对局页为 { matches } / { profileId }（键含 _mp/_mb/_uid/_match 后缀），结构见 stats-core/index.d.ts"
     },
     "fetchedAt": {
       "bsonType": "long",
@@ -50,7 +50,7 @@
     },
     "expiresAt": {
       "bsonType": "long",
-      "description": "缓存过期时间戳（毫秒）；有效期口径见 stats-core.STATS_CACHE_TTL_MS / OPERATORS_CACHE_TTL_MS"
+      "description": "缓存过期时间戳（毫秒）；有效期口径见 stats-core 的 STATS_CACHE_TTL_MS / OPERATORS_CACHE_TTL_MS / MATCHES_LIST_TTL_MS / MATCH_TTL_MS / PLAYER_UID_TTL_MS"
     }
   }
 }

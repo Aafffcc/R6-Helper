@@ -1,5 +1,10 @@
 import { callCloudObject } from './cloud';
-import type { NormalizedOperatorStats, NormalizedPlayerStats, StatsPlatform } from '@/types/stats';
+import type {
+  NormalizedMatchSummary,
+  NormalizedOperatorStats,
+  NormalizedPlayerStats,
+  StatsPlatform,
+} from '@/types/stats';
 import { AppError } from '@/types/errors';
 
 export interface PlayerStatsResult {
@@ -9,6 +14,13 @@ export interface PlayerStatsResult {
 
 export interface PlayerOperatorsResult {
   operators: NormalizedOperatorStats[];
+  fromCache: boolean;
+}
+
+export interface PlayerMatchesResult {
+  matches: NormalizedMatchSummary[];
+  /** 下一页游标（毫秒时间戳），null 表示没有更早对局 */
+  nextBefore: number | null;
   fromCache: boolean;
 }
 
@@ -57,6 +69,35 @@ export async function fetchPlayerOperators(
   }
   return {
     operators: result.operators as NormalizedOperatorStats[],
+    fromCache: result.fromCache === true,
+  };
+}
+
+/**
+ * 对局记录（育碧官方上游）。before 为“加载更多”游标，
+ * 取上一页响应的 nextBefore（页内最早已知对局时间）。
+ */
+export async function fetchPlayerMatches(
+  nickname: string,
+  platform: StatsPlatform,
+  before: number | null = null,
+): Promise<PlayerMatchesResult> {
+  const result = await callCloudObject<{
+    matches?: unknown;
+    nextBefore?: unknown;
+    fromCache?: unknown;
+  }>('stats', 'getPlayerMatches', { nickname, platform, before });
+  if (!Array.isArray(result?.matches)) {
+    throw new AppError('E_UNKNOWN', '云端返回的对局记录结构异常');
+  }
+  const matches = result.matches as NormalizedMatchSummary[];
+  // 形状守卫：缺 id 的条目视为结构异常，避免渲染层拿到脏数据
+  if (matches.some((match) => typeof match?.id !== 'string' || match.id === '')) {
+    throw new AppError('E_UNKNOWN', '云端返回的对局记录结构异常');
+  }
+  return {
+    matches,
+    nextBefore: typeof result.nextBefore === 'number' ? result.nextBefore : null,
     fromCache: result.fromCache === true,
   };
 }

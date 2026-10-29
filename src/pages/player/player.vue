@@ -3,14 +3,16 @@ import { computed, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 
 import { useToast } from '@wot-ui/ui/components/wd-toast';
+import MatchHistoryList from '@/components/MatchHistoryList.vue';
 import OperatorStatsList from '@/components/OperatorStatsList.vue';
 import RpTrendChart from '@/components/RpTrendChart.vue';
 import SeasonHistoryList from '@/components/SeasonHistoryList.vue';
 import StatBlock from '@/components/StatBlock.vue';
 import { isFavorite, toggleFavorite } from '@/services/favorites';
-import { fetchPlayerOperators, fetchPlayerStats } from '@/services/stats';
+import { fetchPlayerMatches, fetchPlayerOperators, fetchPlayerStats } from '@/services/stats';
 import { R6_THEME_VARS } from '@/styles/theme';
 import type {
+  NormalizedMatchSummary,
   NormalizedModeStats,
   NormalizedOperatorStats,
   NormalizedPlayerStats,
@@ -19,6 +21,7 @@ import type {
 import { isStatsPlatform } from '@/types/stats';
 import { toAppError } from '@/types/errors';
 import { formatDashValue, formatDecimal, formatPercent, formatRelativeTime } from '@/utils/format';
+import { aggregateRpPointsByDay } from '@/utils/rpTrend';
 
 type LoadState = 'loading' | 'success' | 'error';
 type OperatorsState = 'loading' | 'success' | 'error';
@@ -44,7 +47,18 @@ const starred = ref(false);
 
 const operatorsState = ref<OperatorsState>('loading');
 const operators = ref<NormalizedOperatorStats[]>([]);
+const operatorsErrorCode = ref('');
+const operatorsErrorDetail = ref<string | null>(null);
 const showAllOperators = ref(false);
+
+type MatchesState = 'loading' | 'success' | 'error';
+
+const matchesState = ref<MatchesState>('loading');
+const matches = ref<NormalizedMatchSummary[]>([]);
+const matchesErrorCode = ref('');
+const matchesErrorDetail = ref<string | null>(null);
+const matchesNextBefore = ref<number | null>(null);
+const isLoadingMoreMatches = ref(false);
 
 const query = ref<{ nickname: string; platform: StatsPlatform }>({
   nickname: '',
@@ -54,8 +68,9 @@ const query = ref<{ nickname: string; platform: StatsPlatform }>({
 const platformLabel = computed(() => query.value.platform.toUpperCase());
 const ranked = computed(() => stats.value?.ranked ?? null);
 const rankedMatches = computed(() => ranked.value?.matches ?? null);
+// RP 趋势按自然日展示：同一天保留当日最后快照，与图表 x 轴粒度同口径
 const rpPoints = computed(() =>
-  (ranked.value?.rpHistory ?? []).filter((point) => point.rp !== null),
+  aggregateRpPointsByDay((ranked.value?.rpHistory ?? []).filter((point) => point.rp !== null)),
 );
 const seasonHistory = computed(() => stats.value?.seasonHistory ?? []);
 const modeRows = computed<ModeRow[]>(() => [
@@ -128,22 +143,72 @@ async function loadStats(): Promise<boolean> {
 
 /**
  * 干员统计独立加载：失败或未配置上游都不影响主战绩展示，
- * 卡片内给出占位说明即可。
+ * 卡片内给出占位说明即可。失败原因原样展示（与主查询卡片同一口径），
+ * 便于不查云端日志时定位限流、上游配置类问题。
  */
 async function loadOperators() {
   operatorsState.value = 'loading';
+  operatorsErrorCode.value = '';
+  operatorsErrorDetail.value = null;
   try {
     const result = await fetchPlayerOperators(query.value.nickname, query.value.platform);
     operators.value = result.operators;
     operatorsState.value = 'success';
-  } catch {
+  } catch (error) {
+    const appError = toAppError(error);
+    operatorsErrorCode.value = appError.code;
+    operatorsErrorDetail.value = appError.detail;
     operatorsState.value = 'error';
+  }
+}
+
+/**
+ * 对局记录独立加载（育碧官方上游）：与干员统计同一降级口径，
+ * 失败或未配置上游都只影响本卡片，不阻塞主战绩与干员数据展示。
+ */
+async function loadMatches() {
+  matchesState.value = 'loading';
+  matchesErrorCode.value = '';
+  matchesErrorDetail.value = null;
+  try {
+    const result = await fetchPlayerMatches(query.value.nickname, query.value.platform);
+    matches.value = result.matches;
+    matchesNextBefore.value = result.nextBefore;
+    matchesState.value = 'success';
+  } catch (error) {
+    const appError = toAppError(error);
+    matchesErrorCode.value = appError.code;
+    matchesErrorDetail.value = appError.detail;
+    matchesState.value = 'error';
+  }
+}
+
+/** 加载更多：携带上一页最早已知对局时间作为游标，追加结果按 id 去重 */
+async function loadMoreMatches() {
+  if (matchesNextBefore.value === null || isLoadingMoreMatches.value) {
+    return;
+  }
+  isLoadingMoreMatches.value = true;
+  try {
+    const result = await fetchPlayerMatches(
+      query.value.nickname,
+      query.value.platform,
+      matchesNextBefore.value,
+    );
+    const seen = new Set(matches.value.map((match) => match.id));
+    const appended = result.matches.filter((match) => !seen.has(match.id));
+    matches.value = [...matches.value, ...appended];
+    matchesNextBefore.value = result.nextBefore;
+  } catch (error) {
+    toast.show(toAppError(error).message);
+  } finally {
+    isLoadingMoreMatches.value = false;
   }
 }
 
 async function retry() {
   if (await loadStats()) {
-    await loadOperators();
+    await Promise.all([loadOperators(), loadMatches()]);
   }
 }
 
@@ -155,7 +220,7 @@ onLoad(async (options) => {
     platform: isStatsPlatform(platformParam) ? platformParam : 'pc',
   };
   if (await loadStats()) {
-    await loadOperators();
+    await Promise.all([loadOperators(), loadMatches()]);
   }
 });
 </script>
@@ -271,9 +336,7 @@ onLoad(async (options) => {
           <template #title>
             <view class="card__header">
               <text class="card__title">RP 趋势</text>
-              <text v-if="rpPoints.length > 0" class="card__tag"
-                >{{ rpPoints.length }} 个数据点</text
-              >
+              <text v-if="rpPoints.length > 0" class="card__tag">{{ rpPoints.length }} 天数据</text>
             </view>
           </template>
           <RpTrendChart v-if="rpPoints.length > 0" :points="rpPoints" />
@@ -316,7 +379,8 @@ onLoad(async (options) => {
           <template #title>
             <view class="card__header">
               <text class="card__title">干员统计</text>
-              <text class="card__tag">当前赛季 · 全模式</text>
+              <!-- 上游 /v2/operators 不带 seasonYear 时返回生涯聚合，标签须与口径一致 -->
+              <text class="card__tag">生涯 · 全模式</text>
             </view>
           </template>
           <wd-skeleton
@@ -325,8 +389,12 @@ onLoad(async (options) => {
             :row-col="[3]"
             animation="gradient"
           />
-          <view v-else-if="operatorsState === 'error'" class="card__hint">
-            <text>干员数据暂时不可用，不影响主战绩查询</text>
+          <view v-else-if="operatorsState === 'error'" class="operators-error">
+            <text class="operators-error__hint">干员数据暂时不可用，不影响主战绩查询</text>
+            <text v-if="operatorsErrorDetail !== null" class="operators-error__detail">
+              {{ operatorsErrorDetail }}
+            </text>
+            <text class="operators-error__code">错误码：{{ operatorsErrorCode }}</text>
             <text class="card__retry" @tap="loadOperators">重新加载</text>
           </view>
           <text v-else-if="operators.length === 0" class="card__hint">暂无干员统计数据</text>
@@ -348,14 +416,36 @@ onLoad(async (options) => {
           <text class="card__hint">当前数据源暂不提供按地图统计的生涯数据</text>
         </wd-card>
 
-        <wd-card custom-class="card--disabled">
-          <view class="matches-entry">
-            <view class="matches-entry__main">
+        <wd-card>
+          <template #title>
+            <view class="card__header">
               <text class="card__title">对局记录</text>
-              <text class="matches-entry__hint">数据源暂不支持逐场对局查询</text>
+              <text v-if="matches.length > 0" class="card__tag">最近 {{ matches.length }} 场</text>
             </view>
-            <wd-icon name="arrow-right" size="28rpx" color="#555b66" />
+          </template>
+          <wd-skeleton
+            v-if="matchesState === 'loading'"
+            theme="paragraph"
+            :row-col="[3]"
+            animation="gradient"
+          />
+          <view v-else-if="matchesState === 'error'" class="operators-error">
+            <text class="operators-error__hint">对局数据暂时不可用，不影响主战绩查询</text>
+            <text v-if="matchesErrorDetail !== null" class="operators-error__detail">
+              {{ matchesErrorDetail }}
+            </text>
+            <text class="operators-error__code">错误码：{{ matchesErrorCode }}</text>
+            <text class="card__retry" @tap="loadMatches">重新加载</text>
           </view>
+          <text v-else-if="matches.length === 0" class="card__hint">暂无对局记录</text>
+          <template v-else>
+            <MatchHistoryList :matches="matches" />
+            <view v-if="matchesNextBefore !== null" class="matches-more" @tap="loadMoreMatches">
+              <text class="matches-more__text">
+                {{ isLoadingMoreMatches ? '加载中…' : '加载更早对局' }}
+              </text>
+            </view>
+          </template>
         </wd-card>
 
         <view class="footer">
@@ -566,26 +656,45 @@ onLoad(async (options) => {
   padding: 20rpx 0 4rpx;
 }
 
+.operators-error {
+  display: flex;
+  padding: 32rpx 0;
+  flex-direction: column;
+  gap: 8rpx;
+  align-items: center;
+}
+
+.operators-error__hint {
+  font-size: 24rpx;
+  color: $r6-text-secondary;
+}
+
+.operators-error__detail {
+  font-size: 22rpx;
+  color: $r6-text-secondary;
+  text-align: center;
+}
+
+.operators-error__code {
+  font-size: 22rpx;
+  color: $r6-danger;
+}
+
 .operators-toggle__text {
   font-size: 24rpx;
   color: $r6-accent;
 }
 
-.matches-entry {
+.matches-more {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  padding-top: 20rpx;
 }
 
-.matches-entry__main {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.matches-entry__hint {
-  font-size: 22rpx;
-  color: $r6-text-secondary;
+.matches-more__text {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: $r6-accent;
 }
 
 .footer {

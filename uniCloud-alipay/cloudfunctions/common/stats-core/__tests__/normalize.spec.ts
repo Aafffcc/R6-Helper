@@ -5,6 +5,7 @@ import {
   normalizeOperatorStats,
   normalizeRatio,
   normalizeRpHistory,
+  normalizeUbiMatches,
   normalizeUpstreamStats,
   validatePlayerStatsQuery,
 } from '../index';
@@ -402,5 +403,204 @@ describe('normalizeCacheKey', () => {
 
   it('纯符号昵称仍生成合法键', () => {
     expect(normalizeCacheKey('xbox', '★★★')).toMatch(/^xbox_[a-z0-9]+_anon$/);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * normalizeUbiMatches（育碧对局归一化回归口径）
+ * 端点字段名为社区已知形状（探针 scripts/probe-ubi-endpoints.mjs 校准前母本），
+ * 联调后如发现字段差异，只调整 normalize.spec.ts fixture 与
+ * stats-core 对局适配节的候选字段名，展示契约保持不变。
+ * ------------------------------------------------------------------ */
+
+describe('normalizeUbiMatches（育碧对局归一化）', () => {
+  it('完整条目逐字段映射：本人分段按 profileId 命中，RP 仅排位保留', () => {
+    const { matches } = normalizeUbiMatches(
+      {
+        matches: [
+          {
+            id: 'match-001',
+            matchType: 'ranked',
+            map: 'BANK',
+            roundsWon: 7,
+            roundsLost: 2,
+            players: [
+              { profileId: 'other-1', stats: { kills: 3, deaths: 9, assists: 1 } },
+              {
+                profileId: 'pid-1',
+                stats: { kills: 12, deaths: 4, assists: 3 },
+                skillStats: { current: 3200, change: 25 },
+              },
+            ],
+            completedAt: '2026-10-28T20:30:00.000Z',
+            duration: 2100,
+          },
+        ],
+      },
+      { platform: 'pc', profileId: 'pid-1' },
+    );
+    expect(matches).toEqual([
+      {
+        id: 'match-001',
+        platform: 'pc',
+        mode: 'ranked',
+        map: 'BANK',
+        result: 'win',
+        roundsWon: 7,
+        roundsLost: 2,
+        kills: 12,
+        deaths: 4,
+        assists: 3,
+        rpChange: 25,
+        rpAfter: 3200,
+        playedAt: Date.parse('2026-10-28T20:30:00.000Z'),
+        durationSeconds: 2100,
+      },
+    ]);
+  });
+
+  it('非排位对局即使上游给出 skillStats 也归 null（RP 仅排位口径）', () => {
+    const { matches } = normalizeUbiMatches(
+      {
+        matches: [
+          {
+            id: 'match-casual',
+            matchType: 'casual',
+            players: [
+              {
+                profileId: 'pid-1',
+                stats: { kills: 5, deaths: 5 },
+                skillStats: { current: 3100, change: 0 },
+              },
+            ],
+          },
+        ],
+      },
+      { platform: 'psn', profileId: 'pid-1' },
+    );
+    expect(matches[0]).toMatchObject({ mode: 'casual', rpChange: null, rpAfter: null });
+  });
+
+  it('模式映射：unranked 优先于 rank 关键词，未知类型归 other，缺失归 null', () => {
+    const entry = (id: string, matchType?: string) => ({
+      id,
+      ...(matchType === undefined ? {} : { matchType }),
+    });
+    const { matches } = normalizeUbiMatches(
+      {
+        matches: [
+          entry('a', 'unranked'),
+          entry('b', 'MATCHMAKING_RANKED'),
+          entry('c', 'MATCHMAKING_CASUAL'),
+          entry('d', 'ARCADE'),
+          entry('e'),
+        ],
+      },
+      { platform: 'pc', profileId: null },
+    );
+    expect(matches.map((match) => match.mode)).toEqual([
+      'unranked',
+      'ranked',
+      'casual',
+      'other',
+      null,
+    ]);
+  });
+
+  it('胜负推导：显式结果优先，比分推导兜底，平分与缺失为 null', () => {
+    const { matches } = normalizeUbiMatches(
+      {
+        matches: [
+          { id: 'a', roundsWon: 7, roundsLost: 3 },
+          { id: 'b', roundsWon: 2, roundsLost: 7 },
+          { id: 'c', roundsWon: 3, roundsLost: 3 },
+          { id: 'd', roundResult: 'loss' },
+          { id: 'e' },
+        ],
+      },
+      { platform: 'pc', profileId: null },
+    );
+    expect(matches.map((match) => match.result)).toEqual(['win', 'loss', null, 'loss', null]);
+  });
+
+  it('未知数据一律 null 不填零：仅含 id 的条目其余字段全 null，真实 0 保留', () => {
+    const { matches } = normalizeUbiMatches(
+      {
+        matches: [
+          { id: 'bare' },
+          {
+            id: 'zero-stats',
+            players: [{ profileId: 'pid-1', stats: { kills: 0, deaths: 0 } }],
+          },
+        ],
+      },
+      { platform: 'xbox', profileId: 'pid-1' },
+    );
+    expect(matches[0]).toEqual({
+      id: 'bare',
+      platform: 'xbox',
+      mode: null,
+      map: null,
+      result: null,
+      roundsWon: null,
+      roundsLost: null,
+      kills: null,
+      deaths: null,
+      assists: null,
+      rpChange: null,
+      rpAfter: null,
+      playedAt: null,
+      durationSeconds: null,
+    });
+    expect(matches[1]).toMatchObject({ id: 'zero-stats', kills: 0, deaths: 0, assists: null });
+  });
+
+  it('排序去重：按 playedAt 降序（未知排最后），重复 id 只保留首个，oldestPlayedAt 取页内最早已知值', () => {
+    const { matches, oldestPlayedAt } = normalizeUbiMatches(
+      {
+        matches: [
+          { id: 'new', completedAt: '2026-10-28T10:00:00.000Z' },
+          { id: 'new', completedAt: '2026-10-27T10:00:00.000Z' },
+          { id: 'old', completedAt: '2026-10-21T10:00:00.000Z' },
+          { id: 'unknown-time' },
+        ],
+      },
+      { platform: 'pc', profileId: null },
+    );
+    expect(matches.map((match) => match.id)).toEqual(['new', 'old', 'unknown-time']);
+    // 重复 id 保留首个出现的记录
+    expect(matches[0].playedAt).toBe(Date.parse('2026-10-28T10:00:00.000Z'));
+    expect(oldestPlayedAt).toBe(Date.parse('2026-10-21T10:00:00.000Z'));
+  });
+
+  it('时长毫秒口径换算为秒：远超单局时长的值按毫秒处理', () => {
+    const { matches } = normalizeUbiMatches(
+      {
+        matches: [
+          { id: 'a', duration: 2400000 },
+          { id: 'b', duration: 2400 },
+        ],
+      },
+      { platform: 'pc', profileId: null },
+    );
+    expect(matches.map((match) => match.durationSeconds)).toEqual([2400, 2400]);
+  });
+
+  it('空输入与非数组 matches 返回空页，无 id 条目丢弃', () => {
+    expect(normalizeUbiMatches(null, { platform: 'pc', profileId: null })).toEqual({
+      matches: [],
+      oldestPlayedAt: null,
+    });
+    expect(normalizeUbiMatches({}, { platform: 'pc', profileId: null })).toEqual({
+      matches: [],
+      oldestPlayedAt: null,
+    });
+    expect(normalizeUbiMatches({ matches: 'x' }, { platform: 'pc', profileId: null })).toEqual({
+      matches: [],
+      oldestPlayedAt: null,
+    });
+    expect(
+      normalizeUbiMatches({ matches: [{ map: 'BANK' }] }, { platform: 'pc', profileId: null }),
+    ).toEqual({ matches: [], oldestPlayedAt: null });
   });
 });

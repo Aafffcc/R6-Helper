@@ -61,6 +61,64 @@ export interface NormalizedIdentity {
   level: number | null;
 }
 
+/**
+ * 单场对局摘要（育碧官方对局历史，查询玩家本人分段）。
+ * 除 id/platform 外全部可空：未知数据 null，真实 0 保留。
+ */
+export interface NormalizedMatchSummary {
+  id: string;
+  platform: string;
+  /** 归一模式口径：ranked / unranked / casual / other，未知 null */
+  mode: 'ranked' | 'unranked' | 'casual' | 'other' | null;
+  map: string | null;
+  result: 'win' | 'loss' | null;
+  roundsWon: number | null;
+  roundsLost: number | null;
+  kills: number | null;
+  deaths: number | null;
+  assists: number | null;
+  /** RP 变化，仅排位对局保留（RP 与 MMR 分开口径） */
+  rpChange: number | null;
+  /** 对局后 RP，仅排位对局保留 */
+  rpAfter: number | null;
+  /** 对局完成时间（毫秒），未知 null */
+  playedAt: number | null;
+  /** 对局时长（秒），未知 null */
+  durationSeconds: number | null;
+}
+
+/** 育碧会话（ticket + 过期时间），由云对象落库复用 */
+export interface UbiSession {
+  ticket: string;
+  sessionId: string | null;
+  expiresAt: number;
+}
+
+/** 育碧会话存取回调：生产为 DB 实现（ubi-session 集合），测试注入内存实现 */
+export interface UbiSessionStore {
+  loadSession?(): Promise<unknown>;
+  saveSession?(session: unknown): Promise<void>;
+}
+
+export interface UbiClientConfig {
+  /** 专用小号邮箱，只允许来自 uni-config-center，禁止落日志 */
+  email: string;
+  password: string;
+  /** 缺省 UBI_APP_ID_DEFAULT；探针实测后建议在 config 固定 */
+  appId?: string;
+  authBaseUrl?: string;
+  apiBaseUrl?: string;
+}
+
+export interface PlayerMatchQuery {
+  nickname: string;
+  platform: string;
+  /** “加载更多”游标（毫秒时间戳），缺省/null 表示首页 */
+  before?: number | null;
+  /** 已缓存的育碧 profileId；缺省时客户端自行档案查找 */
+  profileId?: string | null;
+}
+
 export interface NormalizedRankedSummary {
   season: { id: string | null; name: string | null };
   rank: {
@@ -112,6 +170,22 @@ export interface StatsCoreError extends Error {
 export interface UpstreamClient {
   fetchPlayerStats(query: PlayerStatsQuery): Promise<unknown>;
   fetchPlayerOperators(query: PlayerStatsQuery): Promise<unknown>;
+  /** 育碧对局历史原始载荷；未配置 ubi 凭据时抛 E_UPSTREAM_NOT_CONFIGURED */
+  fetchPlayerMatches(query: PlayerMatchQuery): Promise<unknown>;
+}
+
+export interface UbiClient {
+  login(): Promise<UbiSession>;
+  ensureSession(force?: boolean): Promise<UbiSession>;
+  /** 按昵称查找育碧 profileId，未找到抛 E_NOT_FOUND */
+  lookupProfile(nickname: string, platform: string): Promise<string>;
+  fetchPlayerMatches(query: PlayerMatchQuery): Promise<unknown>;
+}
+
+export interface NormalizedMatchPage {
+  matches: NormalizedMatchSummary[];
+  /** 页内最早已知对局时间（毫秒），作为下一页 before 游标；整页未知为 null */
+  oldestPlayedAt: number | null;
 }
 
 export declare const STATS_CACHE_TTL_MS: number;
@@ -120,6 +194,15 @@ export declare const PLATFORMS: string[];
 export declare const DEFAULT_PLATFORM: string;
 export declare const NICKNAME_MAX_LENGTH: number;
 export declare const RP_HISTORY_MAX_POINTS: number;
+export declare const UBI_AUTH_BASE_URL: string;
+export declare const UBI_API_BASE_URL: string;
+export declare const UBI_APP_ID_DEFAULT: string;
+export declare const UBI_SPACE_IDS: Record<string, string>;
+export declare const UBI_SESSION_TTL_MS: number;
+export declare const MATCHES_PAGE_SIZE: number;
+export declare const MATCHES_LIST_TTL_MS: number;
+export declare const MATCH_TTL_MS: number;
+export declare const PLAYER_UID_TTL_MS: number;
 
 export declare function normalizeRatio(value: unknown): number | null;
 
@@ -132,7 +215,16 @@ export declare function normalizeUpstreamStats(
 
 export declare function normalizeOperatorStats(raw: unknown): NormalizedOperatorStats[];
 
+export declare function normalizeUbiMatches(
+  raw: unknown,
+  context: { platform: string; profileId?: string | null },
+): NormalizedMatchPage;
+
 export declare function validatePlayerStatsQuery(params: unknown): PlayerStatsQuery;
+
+export declare function validatePlayerMatchesQuery(
+  params: unknown,
+): PlayerStatsQuery & { before: number | null };
 
 export declare function normalizeCacheKey(platform: string, nickname: string): string;
 
@@ -141,6 +233,19 @@ export declare function createArenyzeClient(
   fetchImpl?: unknown,
 ): UpstreamClient;
 
-export declare function createUpstreamClient(config: UpstreamConfig | null): UpstreamClient;
+export declare function createUbiClient(
+  config: UbiClientConfig,
+  deps?: { fetchImpl?: unknown; loadSession?: unknown; saveSession?: unknown },
+): UbiClient;
+
+export declare function createUpstreamClient(
+  config: UpstreamConfig | null,
+  sessionStore?: UbiSessionStore,
+): UpstreamClient;
+
+/** 读取 config.ubi 段并收敛为客户端凭据结构；缺失或凭据为空返回 null */
+export declare function readUbiCredentials(
+  config: Record<string, unknown>,
+): { email: string; password: string; appId?: string } | null;
 
 export declare function createCoreError(errCode: string, errMsg: string): StatsCoreError;

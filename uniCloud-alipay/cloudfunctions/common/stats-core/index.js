@@ -34,6 +34,34 @@ const ARENYZE_PLATFORM_BY_APP = { pc: 'uplay', psn: 'psn', xbox: 'xbl' };
 // arenyze platformType → 应用侧平台，用于 identity 回填
 const APP_PLATFORM_BY_ARENYZE = { uplay: 'pc', psn: 'psn', xbl: 'xbox' };
 
+/* ------------------------------------------------------------------ *
+ * 育碧官方上游（对局历史）常量。
+ * 端点与取值为社区已知口径，scripts/probe-ubi-endpoints.mjs 联调后
+ * 如有出入，以探针报告为准修订，并把可用 Ubi-AppId 固定进 config.ubi.appId。
+ * ------------------------------------------------------------------ */
+
+const UBI_AUTH_BASE_URL = 'https://public-ubiservices.ubi.com';
+const UBI_API_BASE_URL = 'https://api.r6.ubi.com';
+const UBI_APP_ID_DEFAULT = '63314fb6-d744-46ad-8bea-7153abea7f46';
+// 育碧 titleId/spaceId（PC / PSN / XBOX）
+const UBI_SPACE_IDS = {
+  pc: '5172a89f-5015-47fb-a719-d9b30b22d780',
+  psn: '05bfbde8-51d1-474c-a5fd-9e39bd075b4a',
+  xbox: '0ee5bcc4-6d59-4969-b9e5-e151ec679b3e',
+};
+const UBI_REQUEST_TIMEOUT_MS = 15 * 1000;
+// ticket 实际有效期约 3 小时，保守按 55 分钟复用，宁可多登一次
+const UBI_SESSION_TTL_MS = 55 * 60 * 1000;
+// session 剩余寿命不足该值时不复用，避免请求中途过期
+const UBI_SESSION_REUSE_MARGIN_MS = 60 * 1000;
+
+// 对局缓存与分页口径：列表页短缓存，逐场文档长缓存（对局打完即不可变）
+const MATCHES_PAGE_SIZE = 20;
+const MATCHES_LIST_TTL_MS = STATS_CACHE_TTL_MS;
+const MATCH_TTL_MS = 180 * 24 * 60 * 60 * 1000;
+// 档案查找结果（昵称 → profileId）的缓存有效期
+const PLAYER_UID_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 function isPlainObject(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -308,6 +336,23 @@ function validatePlayerStatsQuery(params) {
     throw createCoreError('E_INVALID_PARAM', `platform 仅支持 ${PLATFORMS.join(' / ')}`);
   }
   return { nickname, platform };
+}
+
+/**
+ * 对局查询入参校验：继承主查询口径，before 为“加载更多”游标
+ * （毫秒时间戳，取上一页最早已知对局时间），缺省 null 表示首页。
+ */
+function validatePlayerMatchesQuery(params) {
+  const base = validatePlayerStatsQuery(params);
+  const source = isPlainObject(params) ? params : {};
+  if (source.before === undefined || source.before === null) {
+    return { ...base, before: null };
+  }
+  const before = toFiniteNumber(source.before);
+  if (before === null || !Number.isInteger(before) || before <= 0) {
+    throw createCoreError('E_INVALID_PARAM', 'before 游标必须为正整数毫秒时间戳');
+  }
+  return { ...base, before };
 }
 
 function hashCacheSeed(seed) {
@@ -791,15 +836,432 @@ function createArenyzeClient(config, fetchImpl) {
   };
 }
 
+/* ------------------------------------------------------------------ *
+ * 育碧官方对局历史适配（/v1/spaces/{spaceId}/titles/r6s/players/{id}/matches）
+ *
+ * 端点字段名为社区已知形状（scripts/probe-ubi-endpoints.mjs 联调校准前的
+ * 实现母本），联调后如发现字段差异，只调整本节候选字段名并同步
+ * normalize.spec.ts fixture，NormalizedMatchSummary 展示契约保持不变。
+ * ------------------------------------------------------------------ */
+
+// 秒值远超单局可能时长（约 11 小时）时按毫秒口径换算为秒
+const MATCH_DURATION_MS_THRESHOLD = 40000;
+
+function normalizeMatchMode(value) {
+  const text = toTrimmedString(value);
+  if (text === null) {
+    return null;
+  }
+  const lower = text.toLowerCase();
+  // 'unranked' 同样包含 rank 关键词，非排位口径必须先判
+  if (lower.includes('unrank') || lower.includes('standard')) {
+    return 'unranked';
+  }
+  if (lower.includes('rank')) {
+    return 'ranked';
+  }
+  if (lower.includes('casual')) {
+    return 'casual';
+  }
+  return 'other';
+}
+
+function normalizeMatchResult(value) {
+  const text = toTrimmedString(value);
+  if (text === null) {
+    return null;
+  }
+  const lower = text.toLowerCase();
+  if (lower === 'win' || lower === 'won' || lower === 'victory') {
+    return 'win';
+  }
+  if (lower === 'loss' || lower === 'lost' || lower === 'defeat') {
+    return 'loss';
+  }
+  return null;
+}
+
+function normalizeMatchDurationSeconds(value) {
+  const num = toFiniteNumber(value);
+  if (num === null || num < 0) {
+    return null;
+  }
+  return num > MATCH_DURATION_MS_THRESHOLD ? Math.round(num / 1000) : num;
+}
+
+/** 取查询玩家本人的分段；profileId 未命中或缺失时退回首个玩家分段 */
+function pickMatchPlayerSegment(entry, profileId) {
+  const players = entry.players;
+  if (!Array.isArray(players)) {
+    return null;
+  }
+  if (profileId !== null) {
+    for (const candidate of players) {
+      if (isPlainObject(candidate) && toTrimmedString(candidate.profileId) === profileId) {
+        return candidate;
+      }
+    }
+  }
+  for (const candidate of players) {
+    if (isPlainObject(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function normalizeMatchEntry(entry, context) {
+  const id = toTrimmedString(entry.id ?? entry.matchId ?? entry._id);
+  if (id === null) {
+    return null;
+  }
+  const mode = normalizeMatchMode(entry.matchType ?? entry.gameMode ?? entry.mode);
+  const roundsWon = toFiniteNumber(entry.roundsWon ?? entry.round_score_win);
+  const roundsLost = toFiniteNumber(entry.roundsLost ?? entry.round_score_lose);
+  let result = normalizeMatchResult(entry.roundResult ?? entry.result);
+  if (result === null && roundsWon !== null && roundsLost !== null && roundsWon !== roundsLost) {
+    result = roundsWon > roundsLost ? 'win' : 'loss';
+  }
+  const player = pickMatchPlayerSegment(entry, context.profileId);
+  const stats = player !== null && isPlainObject(player.stats) ? player.stats : {};
+  const skill = player !== null && isPlainObject(player.skillStats) ? player.skillStats : {};
+  // RP 口径仅排位对局保留，非排位对局不推断
+  const rankedOnly = mode === 'ranked';
+  return {
+    id,
+    platform: context.platform,
+    mode,
+    map: toTrimmedString(entry.map ?? entry.mapName ?? entry.world),
+    result,
+    roundsWon,
+    roundsLost,
+    kills: toFiniteNumber(stats.kills),
+    deaths: toFiniteNumber(stats.deaths),
+    assists: toFiniteNumber(stats.assists),
+    rpChange: rankedOnly ? toFiniteNumber(skill.change ?? skill.rpChange) : null,
+    rpAfter: rankedOnly ? toFiniteNumber(skill.current ?? skill.rpAfter ?? skill.newRp) : null,
+    playedAt: normalizeHistoryTimestamp(
+      entry.completedAt ?? entry.endTime ?? entry.endedAt ?? entry.startedAt ?? entry.timestamp,
+    ),
+    durationSeconds: normalizeMatchDurationSeconds(
+      entry.duration ?? entry.matchDuration ?? entry.durationInSeconds,
+    ),
+  };
+}
+
+/**
+ * 对局列表归一：按 playedAt 降序（未知排最后），重复 id 只保留首个，
+ * oldestPlayedAt 取页内最早已知时间，作为“加载更多”的 before 游标。
+ */
+function normalizeUbiMatches(raw, context) {
+  const sourceContext = isPlainObject(context) ? context : {};
+  const platform = toTrimmedString(sourceContext.platform) ?? DEFAULT_PLATFORM;
+  const profileId = toTrimmedString(sourceContext.profileId);
+  const source = Array.isArray(raw)
+    ? raw
+    : isPlainObject(raw) && Array.isArray(raw.matches)
+      ? raw.matches
+      : [];
+  const seen = new Set();
+  const matches = [];
+  for (const entry of source) {
+    if (!isPlainObject(entry)) {
+      continue;
+    }
+    const normalized = normalizeMatchEntry(entry, { platform, profileId });
+    if (normalized === null || seen.has(normalized.id)) {
+      continue;
+    }
+    seen.add(normalized.id);
+    matches.push(normalized);
+  }
+  matches.sort(
+    (a, b) => (b.playedAt ?? Number.NEGATIVE_INFINITY) - (a.playedAt ?? Number.NEGATIVE_INFINITY),
+  );
+  let oldestPlayedAt = null;
+  for (const match of matches) {
+    if (match.playedAt !== null && (oldestPlayedAt === null || match.playedAt < oldestPlayedAt)) {
+      oldestPlayedAt = match.playedAt;
+    }
+  }
+  return { matches, oldestPlayedAt };
+}
+
+/**
+ * 育碧官方上游客户端（登录 → 档案查找 → 对局历史）。
+ *
+ * 会话生命周期通过 deps 注入：生产由云对象提供落库实现（跨请求复用 ticket，
+ * 遵守“进程级缓存不可靠”纪律），测试注入内存实现，模块保持无状态。
+ * 凭据只经 config 传入，禁止落日志。Buffer 为 Node 运行时全局，
+ * 本模块只被云函数与测试环境加载。
+ */
+function createUbiClient(config, deps) {
+  const email = typeof config.email === 'string' ? config.email.trim() : '';
+  const password = typeof config.password === 'string' ? config.password : '';
+  if (email === '' || password === '') {
+    throw createCoreError('E_UPSTREAM_NOT_CONFIGURED', 'ubi 小号凭据未配置');
+  }
+  const appId =
+    typeof config.appId === 'string' && config.appId.trim() !== ''
+      ? config.appId.trim()
+      : UBI_APP_ID_DEFAULT;
+  const authBaseUrl = resolveUpstreamBaseUrl(config.authBaseUrl, UBI_AUTH_BASE_URL);
+  const apiBaseUrl = resolveUpstreamBaseUrl(config.apiBaseUrl, UBI_API_BASE_URL);
+  const source = isPlainObject(deps) ? deps : {};
+  const doFetch = typeof source.fetchImpl === 'function' ? source.fetchImpl : globalThis.fetch;
+  if (typeof doFetch !== 'function') {
+    throw createCoreError('E_UPSTREAM_NOT_CONFIGURED', '当前运行时不支持 fetch，无法访问上游');
+  }
+  const loadSession =
+    typeof source.loadSession === 'function' ? source.loadSession : async () => null;
+  const saveSession =
+    typeof source.saveSession === 'function' ? source.saveSession : async () => {};
+
+  async function doRequest(url, headers, method) {
+    const timeoutSignal =
+      typeof AbortSignal === 'object' && typeof AbortSignal.timeout === 'function'
+        ? AbortSignal.timeout(UBI_REQUEST_TIMEOUT_MS)
+        : undefined;
+    let response;
+    try {
+      response = await doFetch(url, { method, headers, signal: timeoutSignal });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'unknown';
+      throw createCoreError('E_UPSTREAM_ERROR', `育碧上游网络请求失败：${reason}`);
+    }
+    let body = null;
+    try {
+      body = await response.json();
+    } catch {
+      body = null;
+    }
+    return { ok: response.ok === true, status: response.status, body };
+  }
+
+  function isUsableSession(session) {
+    return (
+      isPlainObject(session) &&
+      typeof session.ticket === 'string' &&
+      session.ticket !== '' &&
+      typeof session.expiresAt === 'number' &&
+      session.expiresAt > Date.now() + UBI_SESSION_REUSE_MARGIN_MS
+    );
+  }
+
+  /**
+   * 登录换取 ticket。401/403 为凭据拒绝，409/423 为风控拦截
+   * （验证码/两步验证），二者都按 E_UPSTREAM_AUTH 收敛，由展示层提示。
+   */
+  async function login() {
+    const basic = Buffer.from(`${email}:${password}`).toString('base64');
+    const { ok, status, body } = await doRequest(
+      `${authBaseUrl}/v3/login`,
+      {
+        Authorization: `Basic ${basic}`,
+        'Ubi-AppId': appId,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      'POST',
+    );
+    if (status === 401 || status === 403) {
+      throw createCoreError('E_UPSTREAM_AUTH', '育碧登录被拒绝：请检查专用小号凭据');
+    }
+    if (status === 409 || status === 423) {
+      throw createCoreError('E_UPSTREAM_AUTH', '育碧登录被风控拦截（验证码/两步验证），请稍后重试');
+    }
+    if (status === 429) {
+      throw createCoreError('E_RATE_LIMITED', '育碧登录频率超限，请稍后再试');
+    }
+    if (!ok || !isPlainObject(body) || toTrimmedString(body.ticket) === null) {
+      throw createCoreError('E_UPSTREAM_ERROR', `育碧登录响应异常：HTTP ${status}`);
+    }
+    const session = {
+      ticket: toTrimmedString(body.ticket) ?? '',
+      sessionId: toTrimmedString(body.sessionId),
+      expiresAt: normalizeHistoryTimestamp(body.expiration) ?? Date.now() + UBI_SESSION_TTL_MS,
+    };
+    await saveSession(session);
+    return session;
+  }
+
+  async function ensureSession(force) {
+    if (force !== true) {
+      const stored = await loadSession();
+      if (isUsableSession(stored)) {
+        return stored;
+      }
+    }
+    return login();
+  }
+
+  function ticketedHeaders(ticket) {
+    return {
+      Authorization: `Ubi_v1 t=${ticket}`,
+      'Ubi-AppId': appId,
+      Accept: 'application/json',
+    };
+  }
+
+  async function lookupProfile(nickname, platform) {
+    const session = await ensureSession(false);
+    const platformType = ARENYZE_PLATFORM_BY_APP[platform] ?? platform;
+    const url = new URL(`${apiBaseUrl}/v3/profiles`);
+    url.searchParams.set('nameOnPlatform', nickname);
+    url.searchParams.set('platformType', platformType);
+    const { ok, status, body } = await doRequest(
+      String(url),
+      ticketedHeaders(session.ticket),
+      'GET',
+    );
+    if (status === 404) {
+      throw createCoreError('E_NOT_FOUND', '玩家不存在或平台不匹配');
+    }
+    if (status === 401 || status === 403) {
+      throw createCoreError('E_UPSTREAM_AUTH', '育碧会话被拒绝：ticket 失效或 AppId 不匹配');
+    }
+    if (status === 429) {
+      throw createCoreError('E_RATE_LIMITED', '育碧调用频率超限，请稍后再试');
+    }
+    if (!ok || !isPlainObject(body) || !Array.isArray(body.profiles)) {
+      throw createCoreError('E_UPSTREAM_ERROR', `育碧档案响应异常：HTTP ${status}`);
+    }
+    for (const entry of body.profiles) {
+      if (isPlainObject(entry) && toTrimmedString(entry.profileId) !== null) {
+        return toTrimmedString(entry.profileId) ?? '';
+      }
+    }
+    throw createCoreError('E_UPSTREAM_ERROR', '育碧档案响应缺少 profileId');
+  }
+
+  function buildMatchesUrl(platform, profileId, before) {
+    const spaceId = UBI_SPACE_IDS[platform];
+    if (typeof spaceId !== 'string') {
+      throw createCoreError(
+        'E_INVALID_PARAM',
+        `platform 仅支持 ${Object.keys(UBI_SPACE_IDS).join(' / ')}`,
+      );
+    }
+    const url = new URL(
+      `${apiBaseUrl}/v1/spaces/${spaceId}/titles/r6s/players/${encodeURIComponent(profileId)}/matches`,
+    );
+    url.searchParams.set('limit', String(MATCHES_PAGE_SIZE));
+    if (before !== null && before !== undefined) {
+      // 分页参数名为社区口径，探针联调后如需修订只改此处
+      url.searchParams.set('beforeDate', new Date(before).toISOString());
+    }
+    return String(url);
+  }
+
+  async function fetchPlayerMatches(query) {
+    const source = isPlainObject(query) ? query : {};
+    const nickname = toTrimmedString(source.nickname);
+    const platform = toTrimmedString(source.platform);
+    if (nickname === null || platform === null) {
+      throw createCoreError('E_INVALID_PARAM', 'nickname / platform 不能为空');
+    }
+    const before = toFiniteNumber(source.before);
+    const session = await ensureSession(false);
+    let profileId = toTrimmedString(source.profileId);
+    if (profileId === null) {
+      profileId = await lookupProfile(nickname, platform);
+    }
+    let response = await doRequest(
+      buildMatchesUrl(platform, profileId, before),
+      ticketedHeaders(session.ticket),
+      'GET',
+    );
+    if (response.status === 401 || response.status === 403) {
+      // ticket 中途失效：强制重登一次再试，仍被拒绝才按认证错误收敛
+      const refreshed = await ensureSession(true);
+      response = await doRequest(
+        buildMatchesUrl(platform, profileId, before),
+        ticketedHeaders(refreshed.ticket),
+        'GET',
+      );
+      if (response.status === 401 || response.status === 403) {
+        throw createCoreError('E_UPSTREAM_AUTH', '育碧会话失效且重新登录后仍被拒绝');
+      }
+    }
+    if (response.status === 429) {
+      throw createCoreError('E_RATE_LIMITED', '育碧调用频率超限，请稍后再试');
+    }
+    if (response.status === 404) {
+      throw createCoreError('E_NOT_FOUND', '玩家对局数据不存在');
+    }
+    if (!response.ok) {
+      throw createCoreError('E_UPSTREAM_ERROR', `育碧对局响应异常：HTTP ${response.status}`);
+    }
+    if (!isPlainObject(response.body)) {
+      throw createCoreError('E_UPSTREAM_ERROR', '育碧对局响应不是合法 JSON');
+    }
+    return response.body;
+  }
+
+  return { login, ensureSession, lookupProfile, fetchPlayerMatches };
+}
+
+/** 上游 baseUrl 兜底：非空字符串裁掉尾部斜杠，否则用默认值 */
+function resolveUpstreamBaseUrl(value, fallback) {
+  if (typeof value === 'string' && value.trim() !== '') {
+    return value.trim().replace(/\/+$/, '');
+  }
+  return fallback;
+}
+
+/** 读取 config.ubi 段并收敛为客户端凭据结构；缺失或凭据为空返回 null */
+function readUbiCredentials(config) {
+  const section = isPlainObject(config.ubi) ? config.ubi : {};
+  const email = typeof section.email === 'string' ? section.email.trim() : '';
+  const password = typeof section.password === 'string' ? section.password : '';
+  if (email === '' || password === '') {
+    return null;
+  }
+  const appId =
+    typeof section.appId === 'string' && section.appId.trim() !== ''
+      ? section.appId.trim()
+      : undefined;
+  return { email, password, appId };
+}
+
 /**
  * 上游客户端工厂：按 uni-config-center 的 r6-upstream 配置分发。
- * 配置缺失或 provider 未知时维持“上游未接入”降级语义。
+ * stats/operators 跟随 provider（当前 arenyze）；matches 跟随 ubi 段凭据，
+ * 两条链路独立降级（E_UPSTREAM_NOT_CONFIGURED），互不影响。
+ * sessionStore 为育碧会话落库回调（loadSession/saveSession），由云对象注入。
  * config.fetchImpl 仅作测试注入点，真实配置来自 JSON，不会带函数。
  */
-function createUpstreamClient(config) {
+function createUpstreamClient(config, sessionStore) {
   const source = isPlainObject(config) ? config : {};
+  const store = isPlainObject(sessionStore) ? sessionStore : {};
+  const ubiCredentials = readUbiCredentials(source);
+  const ubiClient =
+    ubiCredentials !== null
+      ? createUbiClient(ubiCredentials, {
+          fetchImpl: source.fetchImpl,
+          loadSession: store.loadSession,
+          saveSession: store.saveSession,
+        })
+      : null;
+
+  async function fetchPlayerMatches(query) {
+    if (ubiClient === null) {
+      throw createCoreError('E_UPSTREAM_NOT_CONFIGURED', 'ubi 对局凭据未配置');
+    }
+    return ubiClient.fetchPlayerMatches(query);
+  }
+
   if (source.provider === 'arenyze') {
-    return createArenyzeClient(source, source.fetchImpl);
+    const arenyzeClient = createArenyzeClient(source, source.fetchImpl);
+    return {
+      async fetchPlayerStats(query) {
+        return arenyzeClient.fetchPlayerStats(query);
+      },
+      async fetchPlayerOperators(query) {
+        return arenyzeClient.fetchPlayerOperators(query);
+      },
+      fetchPlayerMatches,
+    };
   }
   return {
     async fetchPlayerStats(_query) {
@@ -810,6 +1272,7 @@ function createUpstreamClient(config) {
     async fetchPlayerOperators(_query) {
       throw createCoreError('E_UPSTREAM_NOT_CONFIGURED', '上游数据源尚未接入');
     },
+    fetchPlayerMatches,
   };
 }
 
@@ -820,13 +1283,26 @@ module.exports = {
   DEFAULT_PLATFORM,
   NICKNAME_MAX_LENGTH,
   RP_HISTORY_MAX_POINTS,
+  UBI_AUTH_BASE_URL,
+  UBI_API_BASE_URL,
+  UBI_APP_ID_DEFAULT,
+  UBI_SPACE_IDS,
+  UBI_SESSION_TTL_MS,
+  MATCHES_PAGE_SIZE,
+  MATCHES_LIST_TTL_MS,
+  MATCH_TTL_MS,
+  PLAYER_UID_TTL_MS,
   createCoreError,
   normalizeRatio,
   normalizeRpHistory,
   normalizeUpstreamStats,
   normalizeOperatorStats,
+  normalizeUbiMatches,
   validatePlayerStatsQuery,
+  validatePlayerMatchesQuery,
   normalizeCacheKey,
   createArenyzeClient,
+  createUbiClient,
   createUpstreamClient,
+  readUbiCredentials,
 };

@@ -1,0 +1,33 @@
+{
+  "bsonType": "object",
+  "required": ["ticket", "fetchedAt", "expiresAt"],
+  "permission": {
+    "read": false,
+    "create": false,
+    "update": false,
+    "delete": false,
+    "count": false
+  },
+  "properties": {
+    "_id": {
+      "description": "固定为 'ubi' 的单例文档；育碧登录 ticket 的跨请求落库复用（进程级缓存不可靠）"
+    },
+    "ticket": {
+      "bsonType": "string",
+      "minLength": 1,
+      "description": "育碧会话 ticket（Ubi_v1 认证头取值）；客户端零权限，仅云对象读写，禁止入前端与日志"
+    },
+    "sessionId": {
+      "bsonType": "string",
+      "description": "育碧会话 ID，仅诊断用，可为空串"
+    },
+    "fetchedAt": {
+      "bsonType": "long",
+      "description": "登录时间戳（毫秒）"
+    },
+    "expiresAt": {
+      "bsonType": "long",
+      "description": "会话过期时间戳（毫秒）；口径见 stats-core.UBI_SESSION_TTL_MS（保守 55 分钟）"
+    }
+  }
+}

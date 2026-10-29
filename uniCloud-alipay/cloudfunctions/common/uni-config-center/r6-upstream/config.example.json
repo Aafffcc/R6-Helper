@@ -1,5 +1,10 @@
 {
   "provider": "arenyze",
   "apiKey": "在此填入 arenyze API Key（真实 key 只写在本目录 config.json，该文件已 gitignore）",
-  "baseUrl": "https://public-api.arenyze.com/r6/api"
+  "baseUrl": "https://public-api.arenyze.com/r6/api",
+  "ubi": {
+    "email": "在此填入育碧专用小号邮箱（强烈建议新注册小号，勿用个人主号）",
+    "password": "在此填入该小号密码",
+    "appId": "63314fb6-d744-46ad-8bea-7153abea7f46"
+  }
 }

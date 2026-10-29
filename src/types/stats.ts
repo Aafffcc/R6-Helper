@@ -6,6 +6,7 @@
 
 export type {
   NormalizedIdentity,
+  NormalizedMatchSummary,
   NormalizedModeStats,
   NormalizedOperatorStats,
   NormalizedPlayerStats,

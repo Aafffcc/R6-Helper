@@ -6,6 +6,7 @@
 export type AppErrorCode =
   | 'E_CLOUD_NOT_CONFIGURED'
   | 'E_UPSTREAM_NOT_CONFIGURED'
+  | 'E_UPSTREAM_AUTH'
   | 'E_INVALID_PARAM'
   | 'E_NOT_FOUND'
   | 'E_RATE_LIMITED'
@@ -16,6 +17,7 @@ export type AppErrorCode =
 const FRIENDLY_MESSAGES: Readonly<Record<AppErrorCode, string>> = {
   E_CLOUD_NOT_CONFIGURED: '云服务空间尚未配置，请先在 src/config/env.ts 填写空间信息',
   E_UPSTREAM_NOT_CONFIGURED: '上游数据源尚未接入，确定凭据与字段口径后即可开放查询',
+  E_UPSTREAM_AUTH: '对局数据源登录失败，请稍后再试',
   E_INVALID_PARAM: '查询参数有误，请检查昵称与平台',
   E_NOT_FOUND: '未找到该玩家，请确认昵称与平台',
   E_RATE_LIMITED: '查询过于频繁，请稍后再试',
