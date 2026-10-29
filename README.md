@@ -20,6 +20,7 @@ Agent 页面通过 `uniCloud-alipay/cloudfunctions/agent` 调用 OpenAI Chat Com
 ├─ scripts/
 │  ├─ generate-static-data.mjs      # 静态数据生成脚本（源清单 + 图片 → src/static/gen）
 │  ├─ fetch-arenyze-metadata.mjs    # arenyze 元数据一次性烘焙（maps/skins/charms 源清单）
+│  ├─ probe-ubi-endpoints.mjs       # 育碧官方端点联调探针（手动运行，产出脱敏 fixture）
 │  ├─ upload-assets-to-unicloud.mjs # 图鉴图片批量上传云存储（配合 asset-import 云函数）
 │  ├─ lib/arenyze-metadata.mjs      # 元数据归一化纯逻辑（含回归测试）
 │  └─ source/                       # 静态数据源清单（改数据先改这里；maps/skins/charms 由烘焙生成）
@@ -71,9 +72,10 @@ npm run verify            # format:check + lint + type-check + test
    - 公共模块 `uniCloud-alipay/cloudfunctions/common/uni-config-center/`（右键 →「上传公共模块」；`r6-upstream/config.json` 随模块一起上传，**修改 key 后必须重新上传该模块**）；
    - 公共模块 `uniCloud-alipay/cloudfunctions/common/stats-core/`；
    - 云对象 `uniCloud-alipay/cloudfunctions/stats/`（其 `package.json` 以 `file:` 引用上述两个公共模块）；
-   - DB Schema `uniCloud-alipay/database/stats-cache.schema.json`（客户端读写全部拒绝，仅云函数经管理面访问）。
+   - DB Schema `uniCloud-alipay/database/stats-cache.schema.json`、`uniCloud-alipay/database/ubi-session.schema.json`（客户端读写全部拒绝，仅云函数经管理面访问）。
 3. 客户端 SDK 说明：CLI 构建不会自动注入 uniCloud 运行时（那依赖 HBuilderX 运行菜单），项目在 `src/services/cloud.ts` 中显式 import `@dcloudio/uni-cloud` 并用 `.env.local` 的空间配置初始化，因此终端 `npm run dev:mp-weixin` 联调不依赖 HBuilderX；HBuilderX 的关联仅用于上传云函数与 Schema。
 4. 上游数据源为 arenyze（`https://public-api.arenyze.com/r6/api`，Ubisoft 数据的第三方代理，需 API key）：把 key 填入 `uniCloud-alipay/cloudfunctions/common/uni-config-center/r6-upstream/config.json`（结构参考同目录 `config.example.json`，真实文件已 gitignore，禁止提交），**填完后重新上传 uni-config-center 公共模块**。apiKey 为空或未配置时 `stats` 云对象按 `E_UPSTREAM_NOT_CONFIGURED` 降级，云端日志会输出具体原因（模块缺失 / 配置缺失 / key 为空）。arenyze 免费档每月 2000 次调用，`stats-cache` 有效期内强制命中缓存是配额纪律的一部分，请勿调短 TTL 或绕过缓存直连上游。
+   对局记录走育碧官方 API（第二上游，与 arenyze 互不影响）：在同目录 config.json 的 `ubi` 段填入**专用小号**（新注册，勿用个人主号）的 `email` / `password`，可选固定 `appId`（缺省为社区通用值，可用探针实测后回填）。小号凭据只存 uni-config-center；登录换得的 ticket 落库在 `ubi-session` 集合复用（约 55 分钟，客户端零权限）。未配置 ubi 段时对局卡片按 `E_UPSTREAM_NOT_CONFIGURED` 降级；凭据被拒或触发风控（验证码/两步验证）按 `E_UPSTREAM_AUTH` 提示。端点形状以 `node scripts/probe-ubi-endpoints.mjs` 实测为准（仅手动运行，产出脱敏 fixture 到 `scripts/fixtures/ubi/`），端点或字段口径与社区已知形状有出入时只校准 stats-core 育碧适配节并补回归用例。
 5. 微信端联调前，把 `https://{spaceId}.api-hz.cloudbasefunction.cn`（spaceId 替换为实际值）加入小程序 request 合法域名。
 6. 图片资产上传到云存储（控制台无文件夹上传/文件夹模式，目录结构由云函数保持）：
    1. 生成导入 token：本地 `uniCloud-alipay/cloudfunctions/common/uni-config-center/asset-import/config.json`（结构参考同目录 `config.example.json`，真实文件已 gitignore，可用 `openssl rand -hex 24` 生成 token）；
@@ -92,9 +94,9 @@ npm run verify            # format:check + lint + type-check + test
 - “当前赛季”各模式（ranked / unranked / casual / event）只取当前赛季分段，不做历史回退；往赛季数据走独立的 `seasonHistory` 出口（排除当前赛季，按赛季号降序，同赛季多地区分段取场次数最多的一条，只收排位分段），不参与当前赛季兜底；
 - 赛季最高段位名（`ranked.rank.max`）取 RP 历史中 RP 最高的带名时点；往赛季只有结算段位名与结算/最高 RP（上游分段无最高段位名口径）；
 - 干员统计来自 `/v2/operators?modes=all`（当前赛季、全模式聚合），条目按出场回合数降序；arenyze 未提供按玩家的地图统计端点，「地图统计」卡片为占位展示；
-- 上游平台口径映射：应用侧 `pc / psn / xbox` → arenyze `uplay / psn / xbl`，映射只发生在 stats-core 适配器内；
-- arenyze 未提供逐场对局端点，详情页「对局记录」入口置灰，待数据源支持后启用；
-- 战绩查询必须走 `stats-cache` 缓存：主战绩 TTL 10 分钟（`stats-core.STATS_CACHE_TTL_MS`），干员统计独立缓存键（`_ops` 后缀）TTL 30 分钟（`stats-core.OPERATORS_CACHE_TTL_MS`），有效期内不重复请求上游；
+- 对局记录来自育碧官方对局历史端点（第二上游）：每场含地图、模式（归一为 ranked/unranked/casual/other）、回合比分、查询玩家本人的 K/D 与助攻、排位 RP 变化（非排位对局不产出 RP 口径）、完成时间与时长；缺失字段一律 `null`；RP 与 MMR 分开口径同样适用；
+- 上游平台口径映射：应用侧 `pc / psn / xbox` → arenyze `uplay / psn / xbl`（亦用于育碧 `platformType`），映射只发生在 stats-core 适配器内；
+- 战绩查询必须走 `stats-cache` 缓存：主战绩 TTL 10 分钟（`stats-core.STATS_CACHE_TTL_MS`），干员统计独立缓存键（`_ops` 后缀）TTL 30 分钟（`stats-core.OPERATORS_CACHE_TTL_MS`），对局链路三层缓存——profileId（`_uid` 后缀，30 天）、对局页（`_mp1`/`_mb<游标>` 后缀，10 分钟）、逐场文档（`_m_<id>` 后缀，180 天，对局不可变）——有效期内不重复请求上游；
 - 云对象响应约定（实测 2026-10，依据客户端 SDK 传输层源码）：支付宝云 transport 把函数返回值原样作为 result 交给 importObject；`result.errCode` 为真值即被 SDK 视为业务错误抛出（错误码与消息完整保留），否则 result 原样返回给调用方。因此成功载荷不带 errCode（`{ ok: true, ... }`），业务错误返回 `{ errCode, errMsg }`，客户端经 `unwrapCloudResult` / `toAppError` 收敛；客户端以 `customUI: true` 调用，自行渲染错误面板。禁止在成功载荷携带 errCode（含 `'OK'`，会被误判为错误并弹空提示框）。
 
 ## 静态数据维护
@@ -115,4 +117,6 @@ npm run verify            # format:check + lint + type-check + test
 - [x] 图片托管工具链：asset-import 云函数（URL 化 + token）+ 批量上传脚本，`VITE_ASSET_BASE_URL` 填入前缀即亮图
 - [ ] 图片资产实际上传执行与真机亮图验证（工具链就绪，按「uniCloud 接入步骤」第 6 步操作）
 - [ ] arenyze 真实 key 联调与真机回归（适配器按官方文档字段实现，首次真实响应如与文档有差异需校准 extract 系列函数并补用例）
+- [x] 对局记录（育碧官方第二上游）：stats-core ubi 适配器 + ticket 落库复用 + 三层缓存 + 详情页接入（含回归用例与探针脚本）
+- [ ] 对局记录真实小号联调与真机回归（`node scripts/probe-ubi-endpoints.mjs` 实测端点形状，与社区已知形状有出入时校准育碧适配节并补用例）
 - [ ] 电竞模块（Liquipedia 数据源） / 个人中心（微信登录 + 收藏云同步）
