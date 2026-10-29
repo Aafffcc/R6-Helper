@@ -54,6 +54,25 @@ declare module '@qiun/ucharts' {
         fontColor?: string;
         legendShow?: boolean;
       };
+      /** 横向参考线（本项目仅用于 RP 趋势图的段位边界标注） */
+      markLine?: {
+        type?: string;
+        dashLength?: number;
+        data?: Array<{
+          value: number;
+          lineColor?: string;
+          showLabel?: boolean;
+          labelText?: string;
+          labelFontSize?: number;
+          labelPadding?: number;
+          labelFontColor?: string;
+          labelBgColor?: string;
+          labelBgOpacity?: number;
+          labelAlign?: string;
+          labelOffsetX?: number;
+          labelOffsetY?: number;
+        }>;
+      };
     };
   }
 

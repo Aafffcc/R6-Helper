@@ -3,6 +3,7 @@ import { getCurrentInstance, onMounted, onUnmounted, watch } from 'vue';
 
 import uCharts from '@qiun/ucharts';
 import type { RpHistoryPoint } from '@/types/stats';
+import { aggregateRpPointsByDay, deriveRankBoundaries, formatRpDayLabel } from '@/utils/rpTrend';
 
 const props = defineProps<{
   points: RpHistoryPoint[];
@@ -11,38 +12,48 @@ const props = defineProps<{
 const instance = getCurrentInstance();
 const canvasId = `rp-trend-${Math.random().toString(36).slice(2, 10)}`;
 
-function formatDateLabel(timestamp: number | null): string {
-  if (timestamp === null) {
-    return '';
+const RANK_LABEL_FONT_SIZE = 9;
+const RANK_LABEL_PADDING = 3;
+
+// markLine 徽标需按文本像素宽内移贴边，uCharts 不暴露 measureText，
+// 按半角 0.6em / 全角 1em 估算即可满足排版
+function estimateLabelPixelWidth(text: string, fontSize: number): number {
+  let width = 0;
+  for (const char of text) {
+    width += char.charCodeAt(0) > 0xff ? fontSize : fontSize * 0.6;
   }
-  const date = new Date(timestamp);
-  return `${date.getMonth() + 1}/${date.getDate()}`;
+  return width;
 }
 
-function formatTimeLabel(timestamp: number | null): string {
-  if (timestamp === null) {
-    return '';
-  }
-  const date = new Date(timestamp);
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  return `${hours}:${minutes}`;
-}
-
-function formatAxisLabels(points: RpHistoryPoint[]): string[] {
-  const dateLabels = points.map((point) => formatDateLabel(point.timestamp));
-  const hasDuplicateDates =
-    new Set(dateLabels.filter(Boolean)).size < dateLabels.filter(Boolean).length;
-  return points.map((point) =>
-    hasDuplicateDates ? formatTimeLabel(point.timestamp) : formatDateLabel(point.timestamp),
-  );
+// 段位徽标贴绘图区右缘：uCharts 的非 left 对齐默认从右缘向画布外排布，
+// 用负偏移把徽标整体拉回绘图区内侧，避免被画布裁切
+function buildRankMarkLines(points: RpHistoryPoint[]) {
+  return deriveRankBoundaries(points).map((boundary) => ({
+    value: boundary.rp,
+    lineColor: '#4a5160',
+    showLabel: boundary.showLabel,
+    labelText: boundary.rank,
+    labelFontSize: RANK_LABEL_FONT_SIZE,
+    labelPadding: RANK_LABEL_PADDING,
+    labelFontColor: '#ff8c1a',
+    labelBgColor: '#262b35',
+    labelBgOpacity: 0.9,
+    labelAlign: 'right',
+    labelOffsetX: -(
+      estimateLabelPixelWidth(boundary.rank, RANK_LABEL_FONT_SIZE) +
+      RANK_LABEL_PADDING * 2 +
+      4
+    ),
+  }));
 }
 
 function renderChart() {
-  const valid = props.points.filter((point) => point.rp !== null);
-  if (valid.length === 0) {
+  // x 轴以自然日为粒度（同一天保留最后快照）；输入已按天聚合时幂等
+  const daily = aggregateRpPointsByDay(props.points.filter((point) => point.rp !== null));
+  if (daily.length === 0) {
     return;
   }
+  const rankMarkLines = buildRankMarkLines(daily);
   const query = uni.createSelectorQuery().in(instance);
   // 布局尺寸量外层普通 view：H5 端 canvas 由 uni 自管放大 backing store，
   // 直接探测 canvas 元素拿到的宽高会失真，导致图表按错误尺寸布局被裁切
@@ -73,11 +84,11 @@ function renderChart() {
       width,
       height,
       pixelRatio: 1,
-      categories: formatAxisLabels(valid),
+      categories: daily.map((point) => formatRpDayLabel(point.timestamp)),
       series: [
         {
           name: 'RP',
-          data: valid.map((point) => point.rp),
+          data: daily.map((point) => point.rp),
           color: '#ff8c1a',
         },
       ],
@@ -107,6 +118,7 @@ function renderChart() {
       extra: {
         line: { type: 'curve', width: 2, activeType: 'hollow' },
         tooltip: { showBox: true, bgColor: '#262b35', fontColor: '#f5f6f8', legendShow: false },
+        markLine: { type: 'dash', dashLength: 4, data: rankMarkLines },
       },
     });
   });
